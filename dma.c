@@ -5,73 +5,75 @@
 #include <string.h>
 #include <unistd.h>
 
-void dma_init(ControladorDMA_t *ctrl, palabra_t *memoria, pthread_mutex_t *mutex_bus) {
-    ctrl->dma.pista = 0;
-    ctrl->dma.cilindro = 0;
-    ctrl->dma.sector = 0;
-    ctrl->dma.operacion = DMA_LEER;
-    ctrl->dma.dir_memoria = 0;
-    ctrl->dma.estado = DMA_EXITO;
-    ctrl->dma.activo = 0;
-    ctrl->memoria = memoria;
-    ctrl->mutex_bus = mutex_bus;
-    ctrl->ejecutando = 0;
+void dma_init(ControladorDMA_t *controlador_dma, palabra_t *memoria, pthread_mutex_t *mutex_bus) {
+    //Inicializacion de registros 
+    controlador_dma->dma.pista = 0;
+    controlador_dma->dma.cilindro = 0;
+    controlador_dma->dma.sector = 0;
+    controlador_dma->dma.operacion = DMA_LEER;           //Al principio leer
+    controlador_dma->dma.dir_memoria = 0;
+    controlador_dma->dma.estado = DMA_EXITO;             //Estado inicial
+    controlador_dma->dma.activo = 0;
+    controlador_dma->memoria = memoria;                  //Guarda la direccion de memoria dentro de la estructura del DMA
+    controlador_dma->mutex_bus = mutex_bus;
+    controlador_dma->ejecutando = 0;
     
-    // Inicializar disco con datos vacios
-    memset(&ctrl->disco, 0, sizeof(Disco_t));
+    // Simula un disco duro nuevo 
+    memset(&controlador_dma->disco, 0, sizeof(Disco_t));
     
-    log_mensaje("DMA y Disco inicializados");
+    log_mensaje("DMA y Disco inicializados");   //Escribe en el archivo de registro que el componente se inicio correctamente.
 }
 
-void dma_set_pista(ControladorDMA_t *ctrl, int pista) {
-    ctrl->dma.pista = pista;
+//Esta funcion se encarga de seleccionar en que anillo del disco se va a leer o escribir.
+void dma_set_pista(ControladorDMA_t *controlador_dma, int pista) {
+    controlador_dma->dma.pista = pista;
     char msg[100];
     sprintf(msg, "DMA: Pista establecida = %d", pista);
     log_mensaje(msg);
 }
-
-void dma_set_cilindro(ControladorDMA_t *ctrl, int cilindro) {
-    ctrl->dma.cilindro = cilindro;
+//Esta funcion selecciona el cilindro
+void dma_set_cilindro(ControladorDMA_t *controlador_dma, int cilindro) {
+    controlador_dma->dma.cilindro = cilindro;            //Guarda el valor del cilindro en la estructura interna.
     char msg[100];
-    sprintf(msg, "DMA: Cilindro establecido = %d", cilindro);
+    sprintf(msg, "DMA: Cilindro establecido = %d", cilindro);  
     log_mensaje(msg);
 }
-
-void dma_set_sector(ControladorDMA_t *ctrl, int sector) {
-    ctrl->dma.sector = sector;
+//Esta funcion especifica dentro de la pista donde esta el dato.
+void dma_set_sector(ControladorDMA_t *controlador_dma, int sector) {
+    controlador_dma->dma.sector = sector;
     char msg[100];
     sprintf(msg, "DMA: Sector establecido = %d", sector);
     log_mensaje(msg);
 }
-
-void dma_set_operacion(ControladorDMA_t *ctrl, int operacion) {
-    ctrl->dma.operacion = operacion;
+//Indica al DMA si debe sacar datos del disco o escribir en el 
+void dma_set_operacion(ControladorDMA_t *controlador_dma, int operacion) {
+    controlador_dma->dma.operacion = operacion;
     char msg[100];
     sprintf(msg, "DMA: Operacion establecida = %s", 
             operacion == DMA_LEER ? "LEER" : "ESCRIBIR");
     log_mensaje(msg);
 }
-
-void dma_set_direccion(ControladorDMA_t *ctrl, int direccion) {
-    ctrl->dma.dir_memoria = direccion;
+//Guarda la direccion de memoria fisica donde se va a realizar la transferencia.
+void dma_set_direccion(ControladorDMA_t *controlador_dma, int direccion) {
+    controlador_dma->dma.dir_memoria = direccion;
     char msg[100];
     sprintf(msg, "DMA: Direccion memoria = %d", direccion);
     log_mensaje(msg);
 }
 
 void* dma_thread_func(void *arg) {
-    ControladorDMA_t *ctrl = (ControladorDMA_t*)arg;
+    ControladorDMA_t *controlador_dma = (ControladorDMA_t*)arg;
     
     log_mensaje("DMA: Iniciando operacion de E/S");
     
     // Validar parametros
-    if (ctrl->dma.pista >= DISCO_PISTAS || 
-        ctrl->dma.cilindro >= DISCO_CILINDROS ||
-        ctrl->dma.sector >= DISCO_SECTORES) {
-        ctrl->dma.estado = DMA_ERROR;
+    if (controlador_dma->dma.pista >= DISCO_PISTAS || 
+        controlador_dma->dma.cilindro >= DISCO_CILINDROS ||
+        controlador_dma->dma.sector >= DISCO_SECTORES) {
+        controlador_dma->dma.estado = DMA_ERROR;
         log_error("DMA: Parametros de disco invalidos", 0);
         lanzar_interrupcion(INT_IO_FINISH);
-        ctrl->dma.activo = 0;
+        controlador_dma->dma.activo = 0;
         return NULL;
     }
     
@@ -79,35 +81,37 @@ void* dma_thread_func(void *arg) {
     usleep(100000); // 100ms
     
     // Arbitraje del bus
-    pthread_mutex_lock(ctrl->mutex_bus);
+    pthread_mutex_lock(controlador_dma->mutex_bus);
     
-    if (ctrl->dma.operacion == DMA_LEER) {
+    if (controlador_dma->dma.operacion == DMA_LEER) {
         // Leer del disco a memoria
-        char *sector_data = ctrl->disco.datos[ctrl->dma.pista]
-                                             [ctrl->dma.cilindro]
-                                             [ctrl->dma.sector];
+        char *sector_data = controlador_dma->disco.datos[controlador_dma->dma.pista]
+                                             [controlador_dma->dma.cilindro]
+                                             [controlador_dma->dma.sector];
         
         palabra_t dato;
         sscanf(sector_data, "%d", &dato);
-        ctrl->memoria[ctrl->dma.dir_memoria] = dato;
+
+        // Guardar en memoria RAM el dato leido del disco
+        controlador_dma->memoria[controlador_dma->dma.dir_memoria] = dato;
         
         log_mensaje("DMA: Lectura de disco completada");
     } else {
-        // Escribir de memoria a disco
-        palabra_t dato = ctrl->memoria[ctrl->dma.dir_memoria];
-        sprintf(ctrl->disco.datos[ctrl->dma.pista]
-                                 [ctrl->dma.cilindro]
-                                 [ctrl->dma.sector], 
+        // Extrae el dato de memoria RAM y lo escribe en el disco
+        palabra_t dato = controlador_dma->memoria[controlador_dma->dma.dir_memoria];
+        sprintf(controlador_dma->disco.datos[controlador_dma->dma.pista]
+                                 [controlador_dma->dma.cilindro]
+                                 [controlador_dma->dma.sector], 
                 "%08d", dato);
         
         log_mensaje("DMA: Escritura a disco completada");
     }
     
-    pthread_mutex_unlock(ctrl->mutex_bus);
+    pthread_mutex_unlock(controlador_dma->mutex_bus);
     
     // Operacion exitosa
-    ctrl->dma.estado = DMA_EXITO;
-    ctrl->dma.activo = 0;
+    controlador_dma->dma.estado = DMA_EXITO;
+    controlador_dma->dma.activo = 0;
     
     // Lanzar interrupcion de finalizacion
     lanzar_interrupcion(INT_IO_FINISH);
@@ -115,29 +119,29 @@ void* dma_thread_func(void *arg) {
     return NULL;
 }
 
-void dma_iniciar(ControladorDMA_t *ctrl) {
-    if (ctrl->dma.activo) {
+void dma_iniciar(ControladorDMA_t *controlador_dma) {
+    if (controlador_dma->dma.activo) {
         log_error("DMA ya esta en operacion", 0);
         return;
     }
     
-    ctrl->dma.activo = 1;
-    ctrl->ejecutando = 1;
+    controlador_dma->dma.activo = 1;
+    controlador_dma->ejecutando = 1;
     
     // Crear thread para la operacion DMA
-    if (pthread_create(&ctrl->thread, NULL, dma_thread_func, ctrl) != 0) {
+    if (pthread_create(&controlador_dma->thread, NULL, dma_thread_func, controlador_dma) != 0) {
         log_error("Error al crear thread DMA", 0);
-        ctrl->dma.activo = 0;
-        ctrl->ejecutando = 0;
+        controlador_dma->dma.activo = 0;
+        controlador_dma->ejecutando = 0;
         return;
     }
     
     log_mensaje("DMA: Thread de E/S creado");
 }
 
-void dma_cleanup(ControladorDMA_t *ctrl) {
-    if (ctrl->ejecutando) {
-        pthread_join(ctrl->thread, NULL);
-        ctrl->ejecutando = 0;
+void dma_terminar(ControladorDMA_t *controlador_dma) {
+    if (controlador_dma->ejecutando) {
+        pthread_join(controlador_dma->thread, NULL);
+        controlador_dma->ejecutando = 0;
     }
 }

@@ -31,6 +31,6 @@ void dma_iniciar(ControladorDMA_t *ctrl);
 void* dma_thread_func(void *arg);
 
 // Limpia recursos
-void dma_cleanup(ControladorDMA_t *ctrl);
+void dma_terminar(ControladorDMA_t *ctrl);
 
 #endif

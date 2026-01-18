@@ -6,24 +6,27 @@
 
 extern int g_modo_debug;
 
+//Inicializa la CPU a 0 
 void cpu_init(CPU_t *cpu) {
     cpu->AC = 0;
     cpu->MAR = 0;
     cpu->MDR = 0;
     cpu->IR = 0;
-    cpu->RB = MEM_SO;
-    cpu->RL = TAM_MEMORIA - 1;
+    cpu->RB = MEM_SO;  //Lo primero que se ejecuta al iniciar el sistema es el SO, el registro base se igual a el, ya que contiene la pos de mem del proceso en ejecucion
     cpu->RX = 0;
     cpu->SP = 0;
-    cpu->PSW.codigo_condicion = 0;
-    cpu->PSW.modo = MODO_KERNEL;
-    cpu->PSW.interrupciones = INT_HABILITADAS;
-    cpu->PSW.pc = MEM_SO;
+    cpu->PSW.codigo_condicion = 0;     //El codigo de condicion del PSW se inicializa a 0
+    cpu->PSW.modo = MODO_USUARIO;       //La CPU siempre debe incializarse en modo kernel
+    cpu->PSW.interrupciones = INT_HABILITADAS;  //La CPU reacciona a señales externas
+    cpu->PSW.pc = MEM_SO;              //Comienza a leer donde se carga el SO
     
     log_mensaje("CPU inicializada");
 }
 
-void cpu_fetch(CPU_t *cpu, palabra_t *memoria) {
+//------------------------------------------------------CICLOS DE INSTRUCCIÓN DE LA CPU----------------------------------------------------------------------------------
+
+
+void cpu_fetch(CPU_t *cpu, palabra_t *memoria) {  //Indica lo primero que debe hacer la CPU
     // MAR obtiene PC
     cpu->MAR = cpu->PSW.pc;
     
@@ -36,6 +39,7 @@ void cpu_fetch(CPU_t *cpu, palabra_t *memoria) {
     // Incrementar PC
     cpu->PSW.pc++;
     
+    //Imprime el estado actual de los registros 
     if (g_modo_debug) {
         printf("FETCH: MAR=%d, MDR=%08d, IR=%08d, PC=%d\n", 
                cpu->MAR, cpu->MDR, cpu->IR, cpu->PSW.pc);
@@ -45,26 +49,26 @@ void cpu_fetch(CPU_t *cpu, palabra_t *memoria) {
 Instruccion_t cpu_decode(palabra_t instruccion_raw) {
     Instruccion_t inst;
     
-    // Extraer campos de la instruccion
-    inst.codigo_op = instruccion_raw / 1000000;
-    inst.direccionamiento = (instruccion_raw / 100000) % 10;
-    inst.valor = instruccion_raw % 100000;
+    inst.codigo_op = instruccion_raw / 1000000;        //Al dividir entre 1000000 se obtiene el codigo de la instruccion
+    inst.direccionamiento = (instruccion_raw / 100000) % 10;     //Obtiene el tipo de direccionamiento (0 o 1)
+    inst.valor = instruccion_raw % 100000;             //Obtiene el dato con el que se trabaja 
     
     return inst;
 }
 
-int cpu_calcular_direccion(CPU_t *cpu, Instruccion_t inst) {
+int cpu_calcular_direccion(CPU_t *cpu, Instruccion_t inst) {     //Calcula la direccion de destino
     int direccion = 0;
     
+    //Se decide como calcular basandose en el campo direccionamiento que extrajimos en la fase de decode:
     switch(inst.direccionamiento) {
         case DIR_DIRECTO:
-            direccion = inst.valor;
+            direccion = inst.valor;       //Toma la direccion de la instruccion
             break;
         case DIR_INMEDIATO:
-            direccion = -1; // No aplica
+            direccion = -1; // No aplica ya que la direccion es el dato directamente
             break;
         case DIR_INDEXADO:
-            direccion = cpu->AC + inst.valor;
+            direccion = cpu->AC + inst.valor;   //Suma el contenido del registro AC + el valor de la instrucción.
             break;
     }
     
@@ -74,11 +78,12 @@ int cpu_calcular_direccion(CPU_t *cpu, Instruccion_t inst) {
 palabra_t cpu_obtener_operando(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria) {
     palabra_t operando = 0;
     
-    switch(inst.direccionamiento) {
+    switch(inst.direccionamiento) {  //Dependiento del tipo de direccionamiento actuara
+
         case DIR_DIRECTO:
             if (cpu->PSW.modo == MODO_USUARIO) {
                 int dir_fisica = cpu->RB + inst.valor;
-                if (!cpu_verificar_memoria(cpu, dir_fisica)) {
+                if (!cpu_verificar_memoria(cpu, dir_fisica)) {  // Si el programa intenta acceder a una direccion fuera de limite
                     lanzar_interrupcion(INT_DIR_INVALID);
                     return 0;
                 }
@@ -107,25 +112,25 @@ palabra_t cpu_obtener_operando(CPU_t *cpu, Instruccion_t inst, palabra_t *memori
     return operando;
 }
 
-int cpu_verificar_memoria(CPU_t *cpu, int direccion) {
-    return (direccion >= cpu->RB && direccion <= cpu->RL);
+int cpu_verificar_memoria(CPU_t *cpu, int direccion) {   //Recibe el estado de la CPU y la direccion fisica que ya calculamos
+    return (direccion >= cpu->RB && direccion <= cpu->RL);  //verifica que la direccion este entre RB y RL
 }
 
 void cpu_actualizar_cc(CPU_t *cpu, palabra_t resultado) {
     // Detectar overflow (mas de 7 digitos de magnitud)
     if (abs(resultado) > 9999999) {
-        cpu->PSW.codigo_condicion = CC_OVERFLOW;
+        cpu->PSW.codigo_condicion = CC_OVERFLOW;   //Detecta un desbordamiento 
         lanzar_interrupcion(INT_OVERFLOW);
-    } else if (resultado == 0) {
-        cpu->PSW.codigo_condicion = CC_IGUAL;
+    } else if (resultado == 0) {              
+        cpu->PSW.codigo_condicion = CC_IGUAL;     //El resultado de la operacion fue 0, el cod de condicion es 0
     } else if (resultado < 0) {
-        cpu->PSW.codigo_condicion = CC_MENOR;
+        cpu->PSW.codigo_condicion = CC_MENOR;     //El resultado de la operacion es negativo, el cod de condicion 1
     } else {
-        cpu->PSW.codigo_condicion = CC_MAYOR;
+        cpu->PSW.codigo_condicion = CC_MAYOR;     //El resultado de la operacion es positivo, el cod de condicion 2
     }
 }
 
-void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria) {
+void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, ControladorDMA_t *dma) {
     palabra_t operando;
     palabra_t resultado;
     int direccion;
@@ -137,11 +142,11 @@ void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria) {
     
     switch(inst.codigo_op) {
         case 0: // sum
-            operando = cpu_obtener_operando(cpu, inst, memoria);
-            resultado = cpu->AC + operando;
-            cpu_actualizar_cc(cpu, resultado);
-            cpu->AC = resultado;
-            log_operacion("SUM", cpu->AC, operando, resultado);
+            operando = cpu_obtener_operando(cpu, inst, memoria); //Trae el dato (segun el direccionamiento)
+            resultado = cpu->AC + operando;                      // Hace la suma 
+            cpu_actualizar_cc(cpu, resultado);                   // Actualiza el codigo de condicion
+            cpu->AC = resultado;                                 // Guarda el resultado en AC
+            log_operacion("SUM", cpu->AC, operando, resultado);  // Registra la actividad en el log
             break;
             
         case 1: // res
@@ -173,12 +178,12 @@ void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria) {
             break;
             
         case 4: // load
-            operando = cpu_obtener_operando(cpu, inst, memoria);
+            operando = cpu_obtener_operando(cpu, inst, memoria);  // Copia un dato de la RAM al registro AC.
             cpu->AC = operando;
             log_operacion("LOAD", cpu->AC, operando, cpu->AC);
             break;
             
-        case 5: // str
+        case 5: // str copia el valor de AC a la RAM.
             direccion = cpu_calcular_direccion(cpu, inst);
             if (cpu->PSW.modo == MODO_USUARIO) {
                 int dir_fisica = cpu->RB + direccion;
@@ -319,12 +324,33 @@ void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria) {
             break;
             
         case 28: // sdmap - establecer pista
+            dma_set_pista(dma, inst.valor);
+            log_operacion("SDMAP", 0, inst.valor, 0);
+            break;
+            
         case 29: // sdmac - establecer cilindro
+            dma_set_cilindro(dma, inst.valor);
+            log_operacion("SDMAC", 0, inst.valor, 0);
+            break;
+            
         case 30: // sdmas - establecer sector
-        case 31: // sdmaio - establecer operacion
+            dma_set_sector(dma, inst.valor);
+            log_operacion("SDMAS", 0, inst.valor, 0);
+            break;
+            
+        case 31: // sdmaio - establecer operacion (0=Leer, 1=Escribir)
+            dma_set_operacion(dma, inst.valor);
+            log_operacion("SDMAIO", 0, inst.valor, 0);
+            break;
+            
         case 32: // sdmam - establecer direccion memoria
+            dma_set_direccion(dma, inst.valor);
+            log_operacion("SDMAM", 0, inst.valor, 0);
+            break;
+            
         case 33: // sdmaon - iniciar DMA
-            // Se manejan en el modulo DMA
+            dma_iniciar(dma);
+            log_operacion("SDMAON", 0, 0, 0);
             break;
             
         default:
@@ -334,37 +360,40 @@ void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria) {
     }
 }
 
+ //Guarda los datos del PSW en la RAM
 palabra_t cpu_psw_a_palabra(PSW_t psw) {
-    return psw.codigo_condicion * 10000000 +
-           psw.modo * 1000000 +
-           psw.interrupciones * 100000 +
-           psw.pc;
+    return psw.codigo_condicion * 10000000 +     // Pone el CC en el 8vo digito
+           psw.modo * 1000000 +                  // Pone el Modo en el 7mo digito
+           psw.interrupciones * 100000 +         // Pone las Int en el 6to digito
+           psw.pc;                               // Los ultimos 5 digitos son para el PC
 }
 
 PSW_t cpu_palabra_a_psw(palabra_t palabra) {
     PSW_t psw;
-    psw.codigo_condicion = palabra / 10000000;
-    psw.modo = (palabra / 1000000) % 10;
-    psw.interrupciones = (palabra / 100000) % 10;
-    psw.pc = palabra % 100000;
+    psw.codigo_condicion = palabra / 10000000;    // Extrae el digito de la izquierda
+    psw.modo = (palabra / 1000000) % 10;          // Aisla el digito del modo
+    psw.interrupciones = (palabra / 100000) % 10;  // Aisla el digito de interrupciones
+    psw.pc = palabra % 100000;                     // Se queda con los ultimos 5 digitos
     return psw;
 }
 
+ //Se usa cuando ocurre una interrupcion, guardamos todo para que el SO pueda retomar
 void cpu_salvar_contexto(CPU_t *cpu, palabra_t *memoria) {
     // Guardar registros importantes en la pila
-    memoria[++cpu->SP] = cpu->AC;
-    memoria[++cpu->SP] = cpu->RX;
-    memoria[++cpu->SP] = cpu_psw_a_palabra(cpu->PSW);
+    memoria[++cpu->SP] = cpu->AC;       // Sube el puntero de pila y guarda el AC
+    memoria[++cpu->SP] = cpu->RX;       // Sube el puntero y guarda el Registro X
+    memoria[++cpu->SP] = cpu_psw_a_palabra(cpu->PSW);  // Guarda el estado completo (PSW) empaquetado
 }
 
+//saca los valores de la pila para que la CPU siga exactamente donde se quedo
 void cpu_restaurar_contexto(CPU_t *cpu, palabra_t *memoria) {
     // Restaurar registros desde la pila
-    cpu->PSW = cpu_palabra_a_psw(memoria[cpu->SP--]);
-    cpu->RX = memoria[cpu->SP--];
-    cpu->AC = memoria[cpu->SP--];
+    cpu->PSW = cpu_palabra_a_psw(memoria[cpu->SP--]);  // Recupera y desglosa el PSW, luego baja la pila
+    cpu->RX = memoria[cpu->SP--];                      // Recupera el RX y baja la pila
+    cpu->AC = memoria[cpu->SP--];                      // Recupera el AC y baja la pila
 }
 
-void cpu_ciclo_instruccion(CPU_t *cpu, palabra_t *memoria) {
+void cpu_ciclo_instruccion(CPU_t *cpu, palabra_t *memoria, ControladorDMA_t *dma) {
     // Fase de busqueda
     cpu_fetch(cpu, memoria);
     
@@ -372,5 +401,5 @@ void cpu_ciclo_instruccion(CPU_t *cpu, palabra_t *memoria) {
     Instruccion_t inst = cpu_decode(cpu->IR);
     
     // Fase de ejecucion
-    cpu_execute(cpu, inst, memoria);
+    cpu_execute(cpu, inst, memoria, dma);
 }

@@ -19,6 +19,6 @@ palabra_t memoria_leer(Memoria_t *mem, int direccion);
 void memoria_escribir(Memoria_t *mem, int direccion, palabra_t dato);
 
 // Carga programa desde archivo
-int memoria_cargar_programa(Memoria_t *mem, const char *archivo, int dir_inicio);
+int memoria_cargar_programa(Memoria_t *mem, const char *archivo, int dir_inicio, int *cant_palabras);
 
 #endif

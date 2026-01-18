@@ -24,7 +24,7 @@ void lanzar_interrupcion(int codigo) {
     g_codigo_interrupcion = codigo;
     
     char msg[200];
-    sprintf(msg, "INTERRUPCION LANZADA: Codigo %d - %s", 
+sprintf(msg, "INTERRUPCION ARROJADA: Codigo %d - %s", 
             codigo, obtener_nombre_interrupcion(codigo));
     log_interrupcion(msg);
     printf("\n*** %s ***\n", msg);

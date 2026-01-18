@@ -1,0 +1,15 @@
+# 1. Ignorar absolutamente todo
+*
+
+# 2. IMPORTANTE: No ignorar las carpetas (para poder entrar en ellas)
+!*/
+
+# 3. No ignorar (mantener) archivos .c y .h
+!*.c
+!*.h
+!Makefile
+!programas/
+!programas/**
+
+# 4. (Opcional pero recomendado) No ignorar el propio .gitignore
+!.gitignore

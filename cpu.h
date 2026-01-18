@@ -2,12 +2,13 @@
 #define CPU_H
 
 #include "tipos.h"
+#include "dma.h"
 
 // Inicializa la CPU
 void cpu_init(CPU_t *cpu);
 
 // Ciclo de instruccion
-void cpu_ciclo_instruccion(CPU_t *cpu, palabra_t *memoria);
+void cpu_ciclo_instruccion(CPU_t *cpu, palabra_t *memoria, ControladorDMA_t *dma);
 
 // Fase de busqueda
 void cpu_fetch(CPU_t *cpu, palabra_t *memoria);
@@ -16,7 +17,7 @@ void cpu_fetch(CPU_t *cpu, palabra_t *memoria);
 Instruccion_t cpu_decode(palabra_t instruccion_raw);
 
 // Fase de ejecucion
-void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria);
+void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, ControladorDMA_t *dma);
 
 // Calcula direccion efectiva
 int cpu_calcular_direccion(CPU_t *cpu, Instruccion_t inst);

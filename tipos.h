@@ -5,11 +5,11 @@
 
 // Tamano de palabra: 8 digitos decimales
 #define TAM_PALABRA 8
-#define TAM_MEMORIA 2000
-#define MEM_SO 300
-#define MEM_USUARIO (TAM_MEMORIA - MEM_SO)
+#define TAM_MEMORIA 2000 // Tamanio de la memoria ram es de 2000 posiciones
+#define MEM_SO 300       //300 posiciones reservadas para el SO
+#define MEM_USUARIO (TAM_MEMORIA - MEM_SO)    // Posiciones disponibles para el usuario 
 
-// Modos de operacion
+// El procesador tiene dos modos de ejecucion:
 #define MODO_USUARIO 0
 #define MODO_KERNEL 1
 
@@ -29,11 +29,11 @@
 #define INT_HABILITADAS 1
 
 // Tipos de direccionamiento
-#define DIR_DIRECTO 0
-#define DIR_INMEDIATO 1
-#define DIR_INDEXADO 2
-
-// Codigos de condicion
+#define DIR_DIRECTO 0      // Los ultimos 5 digitos referencian a la posicion de memoria donde esta el dato
+#define DIR_INMEDIATO 1    // Los ultimos 5 digitos son el dato
+#define DIR_INDEXADO 2     // Suma del contenido actual del AC + el valor de la instruccion, va a esa direccion y el contenido lo guarda en AC
+ 
+// Codigos de condicion: Muestran el resultado de la operacion aritmetica mas reciente y se ve reflejado en el PSW
 #define CC_IGUAL 0
 #define CC_MENOR 1
 #define CC_MAYOR 2
@@ -56,12 +56,12 @@
 // Tipo para representar una palabra de 8 digitos
 typedef int32_t palabra_t;
 
-// Registro PSW: [CC][MODO][INT][PC(5 digitos)]
+// Registro PSW
 typedef struct {
-    int codigo_condicion;  // 1 digito
-    int modo;              // 1 digito
-    int interrupciones;    // 1 digito
-    int pc;                // 5 digitos
+    int codigo_condicion;  // 1 digito: resultado de las operaciones aritmeticas
+    int modo;              // 1 digito: 0 es modo usuario y 1 modo privilegiado 
+    int interrupciones;    // 1 digito: 0 si estan desabilitadas y 1 si estan habilitadas
+    int pc;                // 5 digitos: direccion a la proxima instruccion a leer
 } PSW_t;
 
 // Estructura de la CPU
@@ -73,8 +73,8 @@ typedef struct {
     palabra_t RB;       // Registro Base
     palabra_t RL;       // Registro Limite
     palabra_t RX;       // Registro base de pila
-    palabra_t SP;       // Stack Pointer
-    PSW_t PSW;          // Program Status Word
+    palabra_t SP;       // Apuntador de pila
+    PSW_t PSW;          // Palabra de estado del sistema
 } CPU_t;
 
 // Estructura del DMA

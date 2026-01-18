@@ -34,7 +34,7 @@ void memoria_escribir(Memoria_t *mem, int direccion, palabra_t dato) {
     mem->datos[direccion] = dato;
 }
 
-int memoria_cargar_programa(Memoria_t *mem, const char *archivo, int dir_inicio) {
+int memoria_cargar_programa(Memoria_t *mem, const char *archivo, int dir_inicio, int *cant_palabras) {
     FILE *fp;
     char linea[256];
     int num_palabras = 0;
@@ -97,6 +97,10 @@ int memoria_cargar_programa(Memoria_t *mem, const char *archivo, int dir_inicio)
     }
     
     fclose(fp);
+
+    if (cant_palabras != NULL) {
+        *cant_palabras = num_palabras;
+    }
     
     char msg[200];
     sprintf(msg, "Programa '%s' cargado: %d palabras desde posicion %d", 

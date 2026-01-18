@@ -8,54 +8,67 @@ int g_modo_debug = 0;
 
 void sistema_init(Sistema_t *sys) {
     // Inicializar mutex
-    pthread_mutex_init(&sys->mutex_bus, NULL);
-    pthread_mutex_init(&sys->mutex_memoria, NULL);
+    pthread_mutex_init(&sys->mutex_bus, NULL);    //Controla quien puede usar el bus de datos.
+    pthread_mutex_init(&sys->mutex_memoria, NULL); //Protege el acceso al arreglo de datos de la RAM.
     
     // Inicializar componentes
-    cpu_init(&sys->cpu);
-    memoria_init(&sys->memoria);
+    cpu_init(&sys->cpu);    //Llama a cpu_init para poner los registros de la CPU en cero
+    memoria_init(&sys->memoria);  //Inicializa la memoria
     dma_init(&sys->dma, sys->memoria.datos, &sys->mutex_bus);
     interrupciones_init(&sys->vector_int);
     
-    sys->ejecutando = 0;
+    sys->ejecutando = 0;     //Indica si la maquina esta corriendo 
     sys->ciclos_reloj = 0;
     sys->periodo_reloj = 0;
     
     log_mensaje("Sistema completo inicializado");
 }
 
+//Recibe el sistema, el nombre del archivo a ejecutar y una bandera que indica si se activara el modo debugger.
 void sistema_ejecutar_programa(Sistema_t *sys, const char *archivo, int modo_debug) {
     g_modo_debug = modo_debug;
-    
+    int cant_palabras = 0; // Variable para recibir el tamaño
     // Cargar programa en memoria
-    int dir_inicio = memoria_cargar_programa(&sys->memoria, archivo, MEM_SO);
+    int dir_inicio = memoria_cargar_programa(&sys->memoria, archivo, MEM_SO, &cant_palabras);
     if (dir_inicio < 0) {
         printf("Error al cargar programa\n");
         return;
     }
     
     // Configurar CPU para ejecutar desde esa direccion
-    sys->cpu.PSW.pc = dir_inicio;
-    sys->cpu.RB = dir_inicio;
-    sys->cpu.RL = TAM_MEMORIA - 1;
+    sys->cpu.PSW.pc = dir_inicio;     //Apunta a la PC a la primera instruccion del programa.
+    sys->cpu.RB = dir_inicio;        //Establece el Registro Base (RB) al inicio de donde se cargo el programa.
+    
+    //Establece el Registro Limite (RL), para que el proceso tenga acceso hasta el final de su espacio de memoria
+    // Por ejemplo si cant_palabras es 7 y RB es 300 -> RL = 300 + 7 - 1 = 306.
+    if (cant_palabras > 0) {
+        sys->cpu.RL = sys->cpu.RB + cant_palabras - 1;
+    } else {
+        // Por seguridad si no se leyó bien se asigna hasta el final de memoria
+        sys->cpu.RL = TAM_MEMORIA - 1;
+    }
+     
     sys->ejecutando = 1;
     
+    //Registra un mensaje 
     char msg[200];
     sprintf(msg, "Iniciando ejecucion desde direccion %d en modo %s", 
             dir_inicio, modo_debug ? "DEBUG" : "NORMAL");
     log_mensaje(msg);
     printf("\n%s\n\n", msg);
     
-    // Ejecutar
+    
     if (modo_debug) {
-        sistema_debugger(sys);
+        sistema_debugger(sys);   // Ejecuta el modo debugger
     } else {
-        while (sys->ejecutando) {
+        while (sys->ejecutando) {  //Modo normal
             sistema_ciclo(sys);
         }
         printf("\nPrograma finalizado\n\n");
     }
 }
+
+//Esta funcion encapsula lo que pasa en un ciclo de reloj.
 
 void sistema_ciclo(Sistema_t *sys) {
     // Verificar si hay interrupciones pendientes
@@ -64,12 +77,12 @@ void sistema_ciclo(Sistema_t *sys) {
     }
     
     // Arbitraje del bus para CPU
-    pthread_mutex_lock(&sys->mutex_bus);
+    pthread_mutex_lock(&sys->mutex_bus);  // La CPU pide permiso exclusivo para usar el bus
     
     // Ejecutar ciclo de instruccion
-    cpu_ciclo_instruccion(&sys->cpu, sys->memoria.datos);
+    cpu_ciclo_instruccion(&sys->cpu, sys->memoria.datos, &sys->dma);// Una vez tiene el bus, realiza la busqueda y ejecucion
     
-    pthread_mutex_unlock(&sys->mutex_bus);
+    pthread_mutex_unlock(&sys->mutex_bus); // Libera el bus para que el DMA pueda usarlo.
     
     // Incrementar contador de ciclos
     sys->ciclos_reloj++;
@@ -80,7 +93,8 @@ void sistema_ciclo(Sistema_t *sys) {
         sys->ciclos_reloj = 0;
     }
     
-    // Condicion de parada: instruccion invalida o fuera de limites
+    // Verifica si la PC apunta a un lugar que no existe en la memoria 
+    // fisica. Si es asi, apaga el simulador (sys->ejecutando = 0) para evitar un Segmentation Fault
     if (sys->cpu.PSW.pc >= TAM_MEMORIA || sys->cpu.PSW.pc < 0) {
         sys->ejecutando = 0;
     }
@@ -89,39 +103,42 @@ void sistema_ciclo(Sistema_t *sys) {
 void sistema_debugger(Sistema_t *sys) {
     char comando[100];
     
-    while (sys->ejecutando) {
+    while (sys->ejecutando) {        //Se mantendra en la consola mientras este en el modo debugger 
         printf("\n--- DEBUGGER ---\n");
         printf("PC: %05d | AC: %08d | SP: %05d\n", 
                sys->cpu.PSW.pc, sys->cpu.AC, sys->cpu.SP);
         printf("Modo: %s | CC: %d | INT: %s\n",
-               sys->cpu.PSW.modo == MODO_KERNEL ? "KERNEL" : "USUARIO",
+               sys->cpu.PSW.modo == MODO_KERNEL ? "KERNEL" : "USUARIO",     //Si esta en Usuario (0) o Kernel (1)
                sys->cpu.PSW.codigo_condicion,
                sys->cpu.PSW.interrupciones == INT_HABILITADAS ? "ON" : "OFF");
         
-        // Mostrar siguiente instruccion
-        if (sys->cpu.PSW.pc < TAM_MEMORIA) {
+        // Verifica que el PC apunte a una direccion valida y luego imprime el contenido de la memoria en esa direccion
+        if (sys->cpu.PSW.pc < TAM_MEMORIA) {  
             printf("Siguiente instruccion [%05d]: %08d\n", 
                    sys->cpu.PSW.pc, sys->memoria.datos[sys->cpu.PSW.pc]);
         }
         
+        //Muestra el menu de opciones
         printf("\nComandos: (s)iguiente, (r)egistro, (m)emoria, (c)ontinuar, (q)uit\n");
         printf("> ");
         
+        //Espera a que el usuario escriba algo y presione Enter. Si hay error o fin de archivo, rompe el bucle
         if (!fgets(comando, sizeof(comando), stdin)) {
             break;
         }
-        
+         //Elimina el salto de linea (\n) que fgets captura al presionar Enter.
         comando[strcspn(comando, "\n")] = 0;
         
         if (strcmp(comando, "s") == 0) {
             // Ejecutar una instruccion
             sistema_ciclo(sys);
             
+            // vuelve a imprimir los registros despues de haber ejecutado la instruccion.
             printf("\nInstruccion ejecutada:\n");
             printf("Resultado - AC: %08d | PC: %05d | SP: %05d\n",
                    sys->cpu.AC, sys->cpu.PSW.pc, sys->cpu.SP);
                    
-        } else if (strcmp(comando, "r") == 0) {
+        } else if (strcmp(comando, "r") == 0) {   //Imprime la lista completa de registros internos de la CPU.
             // Mostrar todos los registros
             printf("\n=== REGISTROS ===\n");
             printf("AC  : %08d\n", sys->cpu.AC);
@@ -137,10 +154,12 @@ void sistema_debugger(Sistema_t *sys) {
         } else if (strcmp(comando, "m") == 0) {
             // Ver memoria
             int dir;
-            printf("Direccion de memoria: ");
+            printf("Direccion de memoria: ");   //Pide un numero entero al usuario (la direccion de RAM que quiere ver).
             scanf("%d", &dir);
             getchar(); // Limpiar buffer
             
+
+            //Verifica que la direccion exista (sea menor a 2000) e imprime el valor guardado ahi
             if (dir >= 0 && dir < TAM_MEMORIA) {
                 printf("Memoria[%d] = %08d\n", dir, sys->memoria.datos[dir]);
             } else {
@@ -150,18 +169,20 @@ void sistema_debugger(Sistema_t *sys) {
         } else if (strcmp(comando, "c") == 0) {
             // Continuar hasta el final
             g_modo_debug = 0;
+            //Ejecuta un bucle rapido que consume todas las instrucciones que quedan hasta que el programa termine.
             while (sys->ejecutando) {
                 sistema_ciclo(sys);
             }
             printf("\nPrograma finalizado\n");
             break;
-            
+        
+        //Termina la ejecucion
         } else if (strcmp(comando, "q") == 0) {
             sys->ejecutando = 0;
             break;
         }
         
-        // Verificar si termino el programa
+        // revisa si el PC se salio de la memoria, eso quiere decir que debe terminar
         if (sys->cpu.PSW.pc >= TAM_MEMORIA || sys->cpu.PSW.pc < 0) {
             printf("\nPrograma finalizado (PC fuera de rango)\n");
             sys->ejecutando = 0;
@@ -170,26 +191,20 @@ void sistema_debugger(Sistema_t *sys) {
 }
 
 void sistema_consola(Sistema_t *sys) {
-    char comando[256];
-    char archivo[200];
-    char modo[20];
-    
-    printf("\n");
-    printf("=============================================\n");
-    printf("  ARQUITECTURA VIRTUAL - Sistema Operativo\n");
-    printf("=============================================\n");
-    printf("\n");
-    
+    char comando[256];  //Almacenara la linea completa que el usuario escriba
+    char archivo[256];  //Se usara para guardar el nombre del programa
+    char modo[20];      //Se usara para guardar el modo si se especifica
+        
     while (1) {
         printf("sistema> ");
         
-        if (!fgets(comando, sizeof(comando), stdin)) {
+        if (!fgets(comando, sizeof(comando), stdin)) {  //Lee lo que el usuario escribe en el teclado y lo guarda en la variable comando
             break;
         }
         
-        comando[strcspn(comando, "\n")] = 0;
+        comando[strcspn(comando, "\n")] = 0;            //ELimina el salto de linea 
         
-        if (strlen(comando) == 0) {
+        if (strlen(comando) == 0) {                    //Vuelve al ciclo si el usuario no presiono ninguna opcion
             continue;
         }
         
@@ -202,7 +217,7 @@ void sistema_consola(Sistema_t *sys) {
             printf("\nComandos disponibles:\n");
             printf("  ejecutar <archivo> <modo>  - Ejecuta un programa\n");
             printf("                               modo: normal | debug\n");
-            printf("  ayuda                       - Muestra esta ayuda\n");
+            printf("  ayuda                       - Solicitar ayuda\n");
             printf("  salir                       - Sale del sistema\n\n");
             continue;
         }
@@ -216,13 +231,13 @@ void sistema_consola(Sistema_t *sys) {
             sistema_ejecutar_programa(sys, archivo, 0);
             
         } else {
-            printf("Comando no reconocido. Escribe 'ayuda' para ver comandos.\n");
+            printf("Comando no reconocido. Escribe 'ayuda' para ver comandos disponibles.\n");
         }
     }
 }
 
 void sistema_cleanup(Sistema_t *sys) {
-    dma_cleanup(&sys->dma);
+    dma_terminar(&sys->dma);
     pthread_mutex_destroy(&sys->mutex_bus);
     pthread_mutex_destroy(&sys->mutex_memoria);
     log_mensaje("Sistema finalizado correctamente");
