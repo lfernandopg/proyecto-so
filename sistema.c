@@ -6,16 +6,16 @@
 
 int g_modo_debug = 0;
 
-void sistema_init(Sistema_t *sys) {
+void sistema_inicializar(Sistema_t *sys) {
     // Inicializar mutex
-    pthread_mutex_init(&sys->mutex_bus, NULL);    //Controla quien puede usar el bus de datos.
+    pthread_mutex_init(&sys->mutex_bus, NULL);    //Controla quien puede usar el bus de datos. (Mutex)
     pthread_mutex_init(&sys->mutex_memoria, NULL); //Protege el acceso al arreglo de datos de la RAM.
     
     // Inicializar componentes
-    cpu_init(&sys->cpu);    //Llama a cpu_init para poner los registros de la CPU en cero
-    memoria_init(&sys->memoria);  //Inicializa la memoria
-    dma_init(&sys->dma, sys->memoria.datos, &sys->mutex_bus);
-    interrupciones_init(&sys->vector_int);
+    cpu_inicializar(&sys->cpu);    //Llama a cpu_inicializar para poner los registros de la CPU en cero
+    memoria_inicializar(&sys->memoria);  //Inicializa la memoria
+    dma_inicializar(&sys->dma, sys->memoria.datos, &sys->mutex_bus);
+    interrupciones_inicializar(&sys->vector_int);
     
     sys->ejecutando = 0;     //Indica si la maquina esta corriendo 
     sys->ciclos_reloj = 0;
@@ -28,7 +28,7 @@ void sistema_init(Sistema_t *sys) {
 void sistema_ejecutar_programa(Sistema_t *sys, const char *archivo, int modo_debug) {
     g_modo_debug = modo_debug;
     // Resetear estado de interrupciones antes de empezar
-    interrupciones_init(&sys->vector_int);
+    interrupciones_inicializar(&sys->vector_int);
     int cant_palabras = 0; // Variable para recibir el tamaño
     // Cargar programa en memoria
     int dir_inicio = memoria_cargar_programa(&sys->memoria, archivo, MEM_SO, &cant_palabras);
@@ -74,28 +74,19 @@ void sistema_ejecutar_programa(Sistema_t *sys, const char *archivo, int modo_deb
 
 void sistema_ciclo(Sistema_t *sys) {
     // Verificar si hay interrupciones pendientes
-    if (g_interrupcion_pendiente) {
+    if (interrupcion_pendiente) {
         // Si ocurre una interrupcion y no hay un manejador cargado en el vector
-        if (sys->vector_int.manejadores[g_codigo_interrupcion] == 0) {
+        if (sys->vector_int.manejadores[codigo_interrupcion] == 0) {
             
             // Caso SVC (Codigo 2): El programa hace una llamada al sistema operativo.
-            if (g_codigo_interrupcion == INT_SYSCALL) {
-                // Si AC es 0, el programa solicita terminar.
-                // Esta es una convencion que se esta definiendo para la terminacion del programa
-                if (sys->cpu.AC == 0) {
-                    log_mensaje("Programa finalizado exitosamente via SVC (AC=0)");
-                    printf("\n>>> Programa finalizado (Llamada al sistema 0: EXIT) <<<\n");
-                    sys->ejecutando = 0;
-                    return;
-                } else {
-                    log_mensaje("Llamada al sistema no reconocida");
-                }
+            if (codigo_interrupcion == INT_SYSCALL) {
+                log_mensaje("Llamada al sistema no reconocida");
             }
             
             // Caso Direccionamiento Invalido (Codigo 6): El PC se salio de RL.
-            if (g_codigo_interrupcion == INT_DIR_INVALID) {
+            if (codigo_interrupcion == INT_DIR_INVALIDA) {
                 log_mensaje("ERROR: Violacion de limites de memoria (PC > RL)");
-                printf("\n>>> ERROR: Direccionamiento invalido. Simulacion abortada. <<<\n");
+                printf("\nERROR: Direccionamiento invalido. \n");
                 sys->ejecutando = 0;
                 return;
             }
@@ -124,8 +115,8 @@ void sistema_ciclo(Sistema_t *sys) {
         sys->ciclos_reloj = 0;
     }
     
-    // Verifica si la PC apunta a un lugar que no existe en la memoria 
-    // fisica. Si es asi, apaga el simulador (sys->ejecutando = 0) para evitar un Segmentation Fault
+    // Verifica si el registro PC apunta a una direccion que no existe en la memoria del sistema
+    // Para evitar un Segmentation Fault
     if (sys->cpu.PSW.pc >= TAM_MEMORIA || sys->cpu.PSW.pc < 0) {
         sys->ejecutando = 0;
     }
@@ -138,7 +129,7 @@ void sistema_debugger(Sistema_t *sys) {
         printf("\n--- DEBUGGER ---\n");
         printf("PC: %05d | AC: %08d | SP: %05d\n", 
                sys->cpu.PSW.pc, sys->cpu.AC, sys->cpu.SP);
-        printf("Modo: %s | CC: %d | INT: %s\n",
+        printf("MODO: %s | COD_CON: %d | INT_HAB: %s\n",
                sys->cpu.PSW.modo == MODO_KERNEL ? "KERNEL" : "USUARIO",     //Si esta en Usuario (0) o Kernel (1)
                sys->cpu.PSW.codigo_condicion,
                sys->cpu.PSW.interrupciones == INT_HABILITADAS ? "ON" : "OFF");
@@ -166,7 +157,7 @@ void sistema_debugger(Sistema_t *sys) {
             
             // vuelve a imprimir los registros despues de haber ejecutado la instruccion.
             printf("\nInstruccion ejecutada:\n");
-            printf("Resultado - AC: %08d | PC: %05d | SP: %05d\n",
+            printf("res - AC: %08d | PC: %05d | SP: %05d\n",
                    sys->cpu.AC, sys->cpu.PSW.pc, sys->cpu.SP);
                    
         } else if (strcmp(comando, "r") == 0) {   //Imprime la lista completa de registros internos de la CPU.
@@ -180,6 +171,9 @@ void sistema_debugger(Sistema_t *sys) {
             printf("RL  : %08d\n", sys->cpu.RL);
             printf("RX  : %08d\n", sys->cpu.RX);
             printf("SP  : %08d\n", sys->cpu.SP);
+            printf("COD_CON  : %05d\n", sys->cpu.PSW.codigo_condicion);
+            printf("MODO  : %05d\n", sys->cpu.PSW.modo);
+            printf("INT_HAB  : %05d\n", sys->cpu.PSW.interrupciones);
             printf("PC  : %05d\n", sys->cpu.PSW.pc);
             
         } else if (strcmp(comando, "m") == 0) {
@@ -267,7 +261,7 @@ void sistema_consola(Sistema_t *sys) {
     }
 }
 
-void sistema_cleanup(Sistema_t *sys) {
+void sistema_limpiar(Sistema_t *sys) {
     dma_terminar(&sys->dma);
     pthread_mutex_destroy(&sys->mutex_bus);
     pthread_mutex_destroy(&sys->mutex_memoria);

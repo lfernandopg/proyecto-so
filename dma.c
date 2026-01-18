@@ -5,7 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 
-void dma_init(ControladorDMA_t *controlador_dma, palabra_t *memoria, pthread_mutex_t *mutex_bus) {
+void dma_inicializar(ControladorDMA_t *controlador_dma, palabra_t *memoria, pthread_mutex_t *mutex_bus) {
     //Inicializacion de registros 
     controlador_dma->dma.pista = 0;
     controlador_dma->dma.cilindro = 0;
@@ -72,7 +72,7 @@ void* dma_thread_func(void *arg) {
         controlador_dma->dma.sector >= DISCO_SECTORES) {
         controlador_dma->dma.estado = DMA_ERROR;
         log_error("DMA: Parametros de disco invalidos", 0);
-        lanzar_interrupcion(INT_IO_FINISH);
+        lanzar_interrupcion(INT_IO_FINALIZADA);
         controlador_dma->dma.activo = 0;
         return NULL;
     }
@@ -99,6 +99,8 @@ void* dma_thread_func(void *arg) {
     } else {
         // Extrae el dato de memoria RAM y lo escribe en el disco
         palabra_t dato = controlador_dma->memoria[controlador_dma->dma.dir_memoria];
+
+        // Escribir en el disco
         sprintf(controlador_dma->disco.datos[controlador_dma->dma.pista]
                                  [controlador_dma->dma.cilindro]
                                  [controlador_dma->dma.sector], 
@@ -114,7 +116,7 @@ void* dma_thread_func(void *arg) {
     controlador_dma->dma.activo = 0;
     
     // Lanzar interrupcion de finalizacion
-    lanzar_interrupcion(INT_IO_FINISH);
+    lanzar_interrupcion(INT_IO_FINALIZADA);
     
     return NULL;
 }

@@ -10,7 +10,7 @@ typedef struct {
 } Memoria_t;
 
 // Inicializa la memoria
-void memoria_init(Memoria_t *mem);
+void memoria_inicializar(Memoria_t *mem);
 
 // Lee de memoria
 palabra_t memoria_leer(Memoria_t *mem, int direccion);

@@ -10,6 +10,8 @@
 !Makefile
 !programas/
 !programas/**
+!casos/
+!casos/**
 
 # 4. (Opcional pero recomendado) No ignorar el propio .gitignore
 !.gitignore

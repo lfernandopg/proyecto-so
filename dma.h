@@ -15,7 +15,7 @@ typedef struct {
 } ControladorDMA_t;
 
 // Inicializa el DMA
-void dma_init(ControladorDMA_t *ctrl, palabra_t *memoria, pthread_mutex_t *mutex_bus);
+void dma_inicializar(ControladorDMA_t *ctrl, palabra_t *memoria, pthread_mutex_t *mutex_bus);
 
 // Establece parametros del DMA
 void dma_set_pista(ControladorDMA_t *ctrl, int pista);

@@ -5,7 +5,7 @@
 
 static FILE *log_file = NULL;
 
-void log_init(void) {
+void log_inicializar(void) {
     log_file = fopen("sistema.log", "w");
     if (!log_file) {
         fprintf(stderr, "Error: No se pudo crear archivo de log\n");
@@ -40,12 +40,12 @@ void log_mensaje(const char *mensaje) {
     fflush(log_file);
 }
 
-void log_operacion(const char *op, palabra_t op1, palabra_t op2, palabra_t resultado) {
+void log_operacion(const char *op, palabra_t op1, palabra_t op2, palabra_t res) {
     if (!log_file) return;
     
     char buffer[256];
-    sprintf(buffer, "OPERACION: %s | Op1=%d, Op2=%d, Resultado=%d", 
-            op, op1, op2, resultado);
+    sprintf(buffer, "OPERACION: %s | Op1=%d, Op2=%d, res=%d", 
+            op, op1, op2, res);
     log_mensaje(buffer);
 }
 

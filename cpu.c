@@ -7,7 +7,7 @@
 extern int g_modo_debug;
 
 //Inicializa la CPU a 0 
-void cpu_init(CPU_t *cpu) {
+void cpu_inicializar(CPU_t *cpu) {
     cpu->AC = 0;
     cpu->MAR = 0;
     cpu->MDR = 0;
@@ -16,23 +16,23 @@ void cpu_init(CPU_t *cpu) {
     cpu->RX = 0;
     cpu->SP = 0;
     cpu->PSW.codigo_condicion = 0;     //El codigo de condicion del PSW se inicializa a 0
-    cpu->PSW.modo = MODO_USUARIO;       //La CPU siempre debe incializarse en modo kernel
+    cpu->PSW.modo = MODO_KERNEL;       //La CPU siempre debe incializarse en modo kernel
     cpu->PSW.interrupciones = INT_HABILITADAS;  //La CPU reacciona a señales externas
     cpu->PSW.pc = MEM_SO;              //Comienza a leer donde se carga el SO
     
     log_mensaje("CPU inicializada");
 }
 
-//------------------------------------------------------CICLOS DE INSTRUCCIoN DE LA CPU----------------------------------------------------------------------------------
+//------------------------------------------------------CICLOS DE INSTRUCCION DE LA CPU----------------------------------------------------------------------------------
 
 
-void cpu_fetch(CPU_t *cpu, palabra_t *memoria) {  //Indica lo primero que debe hacer la CPU
+void cpu_busqueda(CPU_t *cpu, palabra_t *memoria) {  //Indica lo primero que debe hacer la CPU
     // Verificar proteccion de memoria (si estamos en modo usuario)
     if (cpu->PSW.modo == MODO_USUARIO) {
-        // Asumiendo que tu PC es absoluto (basado en tu codigo actual)
+        // Verificar si la direccion de la instruccion esta protegida
         if (cpu->PSW.pc > cpu->RL || cpu->PSW.pc < cpu->RB) {
-            lanzar_interrupcion(INT_DIR_INVALID); // Codigo 6
-            return; // No incrementar PC ni leer instrucciones basura
+            lanzar_interrupcion(INT_DIR_INVALIDA); // Arrojar excepcion codigo 6
+            return;
         }
     }
 
@@ -45,7 +45,7 @@ void cpu_fetch(CPU_t *cpu, palabra_t *memoria) {  //Indica lo primero que debe h
     // IR obtiene MDR
     cpu->IR = cpu->MDR;
     
-    // Incrementar PC
+    // Obtiene la siguiente instruccion
     cpu->PSW.pc++;
     
     //Imprime el estado actual de los registros 
@@ -55,7 +55,7 @@ void cpu_fetch(CPU_t *cpu, palabra_t *memoria) {  //Indica lo primero que debe h
     }
 }
 
-Instruccion_t cpu_decode(palabra_t instruccion_raw) {
+Instruccion_t cpu_decodificar_instruccion(palabra_t instruccion_raw) {
     Instruccion_t inst;
     
     inst.codigo_op = instruccion_raw / 1000000;        //Al dividir entre 1000000 se obtiene el codigo de la instruccion
@@ -93,7 +93,7 @@ palabra_t cpu_obtener_operando(CPU_t *cpu, Instruccion_t inst, palabra_t *memori
             if (cpu->PSW.modo == MODO_USUARIO) {
                 int dir_fisica = cpu->RB + inst.valor;
                 if (!cpu_verificar_memoria(cpu, dir_fisica)) {  // Si el programa intenta acceder a una direccion fuera de limite
-                    lanzar_interrupcion(INT_DIR_INVALID);
+                    lanzar_interrupcion(INT_DIR_INVALIDA);
                     return 0;
                 }
                 operando = memoria[dir_fisica];
@@ -108,7 +108,7 @@ palabra_t cpu_obtener_operando(CPU_t *cpu, Instruccion_t inst, palabra_t *memori
             if (cpu->PSW.modo == MODO_USUARIO) {
                 int dir_fisica = cpu->RB + cpu->AC + inst.valor;
                 if (!cpu_verificar_memoria(cpu, dir_fisica)) {
-                    lanzar_interrupcion(INT_DIR_INVALID);
+                    lanzar_interrupcion(INT_DIR_INVALIDA);
                     return 0;
                 }
                 operando = memoria[dir_fisica];
@@ -121,28 +121,45 @@ palabra_t cpu_obtener_operando(CPU_t *cpu, Instruccion_t inst, palabra_t *memori
     return operando;
 }
 
+void cpu_saltar(CPU_t *cpu, int direccion_destino_relativa) {
+    int dir_fisica = direccion_destino_relativa;
+
+    // Verificar proteccion de memoria para Modo Usuario
+    if (cpu->PSW.modo == MODO_USUARIO) {
+        dir_fisica = cpu->RB + direccion_destino_relativa;
+
+        if (!cpu_verificar_memoria(cpu, dir_fisica)) {
+            lanzar_interrupcion(INT_DIR_INVALIDA);
+            return;
+        }
+    }
+    
+    cpu->PSW.pc = dir_fisica;
+}
+
 int cpu_verificar_memoria(CPU_t *cpu, int direccion) {   //Recibe el estado de la CPU y la direccion fisica que ya calculamos
     return (direccion >= cpu->RB && direccion <= cpu->RL);  //verifica que la direccion este entre RB y RL
 }
 
-void cpu_actualizar_cc(CPU_t *cpu, palabra_t resultado) {
+void cpu_actualizar_cc(CPU_t *cpu, palabra_t res) {
     // Detectar overflow (mas de 7 digitos de magnitud)
-    if (abs(resultado) > 9999999) {
+    if (abs(res) > 9999999) {
         cpu->PSW.codigo_condicion = CC_OVERFLOW;   //Detecta un desbordamiento 
         lanzar_interrupcion(INT_OVERFLOW);
-    } else if (resultado == 0) {              
-        cpu->PSW.codigo_condicion = CC_IGUAL;     //El resultado de la operacion fue 0, el cod de condicion es 0
-    } else if (resultado < 0) {
-        cpu->PSW.codigo_condicion = CC_MENOR;     //El resultado de la operacion es negativo, el cod de condicion 1
+    } else if (res == 0) {              
+        cpu->PSW.codigo_condicion = CC_IGUAL;     //El res de la operacion fue 0, el cod de condicion es 0
+    } else if (res < 0) {
+        cpu->PSW.codigo_condicion = CC_MENOR;     //El res de la operacion es negativo, el cod de condicion 1
     } else {
-        cpu->PSW.codigo_condicion = CC_MAYOR;     //El resultado de la operacion es positivo, el cod de condicion 2
+        cpu->PSW.codigo_condicion = CC_MAYOR;     //El res de la operacion es positivo, el cod de condicion 2
     }
 }
 
-void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, ControladorDMA_t *dma) {
+void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, ControladorDMA_t *dma) {
     palabra_t operando;
-    palabra_t resultado;
+    palabra_t res;
     int direccion;
+    int dir_fisica;
     
     if (g_modo_debug) {
         printf("EXECUTE: OP=%02d, DIR=%d, VAL=%05d\n", 
@@ -152,26 +169,26 @@ void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlador
     switch(inst.codigo_op) {
         case 0: // sum
             operando = cpu_obtener_operando(cpu, inst, memoria); //Trae el dato (segun el direccionamiento)
-            resultado = cpu->AC + operando;                      // Hace la suma 
-            cpu_actualizar_cc(cpu, resultado);                   // Actualiza el codigo de condicion
-            cpu->AC = resultado;                                 // Guarda el resultado en AC
-            log_operacion("SUM", cpu->AC, operando, resultado);  // Registra la actividad en el log
+            res = cpu->AC + operando;                      // Hace la suma 
+            cpu_actualizar_cc(cpu, res);                   // Actualiza el codigo de condicion
+            cpu->AC = res;                                 // Guarda el res en AC
+            log_operacion("SUM", cpu->AC, operando, res);  // Registra la actividad en el log
             break;
             
         case 1: // res
             operando = cpu_obtener_operando(cpu, inst, memoria);
-            resultado = cpu->AC - operando;
-            cpu_actualizar_cc(cpu, resultado);
-            cpu->AC = resultado;
-            log_operacion("RES", cpu->AC, operando, resultado);
+            res = cpu->AC - operando;
+            cpu_actualizar_cc(cpu, res);
+            cpu->AC = res;
+            log_operacion("RES", cpu->AC, operando, res);
             break;
             
         case 2: // mult
             operando = cpu_obtener_operando(cpu, inst, memoria);
-            resultado = cpu->AC * operando;
-            cpu_actualizar_cc(cpu, resultado);
-            cpu->AC = resultado;
-            log_operacion("MULT", cpu->AC, operando, resultado);
+            res = cpu->AC * operando;
+            cpu_actualizar_cc(cpu, res);
+            cpu->AC = res;
+            log_operacion("MULT", cpu->AC, operando, res);
             break;
             
         case 3: // divi
@@ -179,10 +196,10 @@ void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlador
             if (operando == 0) {
                 lanzar_interrupcion(INT_OVERFLOW);
             } else {
-                resultado = cpu->AC / operando;
-                cpu_actualizar_cc(cpu, resultado);
-                cpu->AC = resultado;
-                log_operacion("DIVI", cpu->AC, operando, resultado);
+                res = cpu->AC / operando;
+                cpu_actualizar_cc(cpu, res);
+                cpu->AC = res;
+                log_operacion("DIVI", cpu->AC, operando, res);
             }
             break;
             
@@ -195,9 +212,9 @@ void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlador
         case 5: // str copia el valor de AC a la RAM.
             direccion = cpu_calcular_direccion(cpu, inst);
             if (cpu->PSW.modo == MODO_USUARIO) {
-                int dir_fisica = cpu->RB + direccion;
+                dir_fisica = cpu->RB + direccion;
                 if (!cpu_verificar_memoria(cpu, dir_fisica)) {
-                    lanzar_interrupcion(INT_DIR_INVALID);
+                    lanzar_interrupcion(INT_DIR_INVALIDA);
                     break;
                 }
                 memoria[dir_fisica] = cpu->AC;
@@ -219,36 +236,50 @@ void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlador
             
         case 8: // comp
             operando = cpu_obtener_operando(cpu, inst, memoria);
-            resultado = cpu->AC - operando;
-            cpu_actualizar_cc(cpu, resultado);
-            log_operacion("COMP", cpu->AC, operando, resultado);
+            res = cpu->AC - operando;
+            cpu_actualizar_cc(cpu, res);
+            log_operacion("COMP", cpu->AC, operando, res);
             break;
             
         case 9: // jmpe
-            if (cpu->PSW.codigo_condicion == CC_IGUAL) {
-                cpu->PSW.pc = memoria[inst.valor];
-                log_operacion("JMPE", cpu->AC, inst.valor, cpu->PSW.pc);
+                if (cpu->PSW.codigo_condicion == CC_IGUAL) {
+                operando = cpu_obtener_operando(cpu, inst, memoria);
+                
+                if (!interrupcion_pendiente) {
+                    // Ejecutar el salto
+                    cpu_saltar(cpu, operando);
+                    log_operacion("JMPE", cpu->AC, operando, cpu->PSW.pc);
+                }
             }
             break;
             
         case 10: // jmpne
             if (cpu->PSW.codigo_condicion != CC_IGUAL) {
-                cpu->PSW.pc = memoria[inst.valor];
-                log_operacion("JMPNE", cpu->AC, inst.valor, cpu->PSW.pc);
+                operando = cpu_obtener_operando(cpu, inst, memoria);
+                if (!interrupcion_pendiente) {
+                    cpu_saltar(cpu, operando);
+                    log_operacion("JMPNE", cpu->AC, operando, cpu->PSW.pc);
+                }
             }
             break;
             
         case 11: // jmplt
             if (cpu->PSW.codigo_condicion == CC_MENOR) {
-                cpu->PSW.pc = memoria[inst.valor];
-                log_operacion("JMPLT", cpu->AC, inst.valor, cpu->PSW.pc);
+                operando = cpu_obtener_operando(cpu, inst, memoria);
+                if (!interrupcion_pendiente) {
+                    cpu_saltar(cpu, operando);
+                    log_operacion("JMPLT", cpu->AC, operando, cpu->PSW.pc);
+                }
             }
             break;
             
         case 12: // jmpgt
             if (cpu->PSW.codigo_condicion == CC_MAYOR) {
-                cpu->PSW.pc = memoria[inst.valor];
-                log_operacion("JMPGT", cpu->AC, inst.valor, cpu->PSW.pc);
+                operando = cpu_obtener_operando(cpu, inst, memoria);
+                if (!interrupcion_pendiente) {
+                    cpu_saltar(cpu, operando);
+                    log_operacion("JMPGT", cpu->AC, operando, cpu->PSW.pc);
+                }
             }
             break;
             
@@ -258,8 +289,25 @@ void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlador
             break;
             
         case 14: // retrn
-            cpu->PSW.pc = memoria[cpu->SP];
+            // Validar Underflow
+            if (cpu->SP <= 0) {
+                lanzar_interrupcion(INT_UNDERFLOW);
+                break;
+            }
+
+            int dir_stack = cpu->SP;
+            
+            if (cpu->PSW.modo == MODO_USUARIO) {
+                dir_stack = cpu->RB + cpu->SP;
+                if (!cpu_verificar_memoria(cpu, dir_stack)) {
+                    lanzar_interrupcion(INT_DIR_INVALIDA);
+                    break;
+                }
+            }
+
+            cpu->PSW.pc = memoria[dir_stack];
             cpu->SP--;
+            
             log_operacion("RETRN", cpu->PSW.pc, cpu->SP, cpu->PSW.pc);
             break;
             
@@ -291,6 +339,11 @@ void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlador
             break;
             
         case 20: // strrb
+            if (cpu->PSW.modo == MODO_USUARIO) {
+                    // Un usuario NO puede cambiar su propio registro base
+                    lanzar_interrupcion(INT_INST_INVALIDA); 
+                    break;
+            }
             cpu->RB = cpu->AC;
             log_operacion("STRRB", cpu->AC, cpu->RB, cpu->RB);
             break;
@@ -301,6 +354,11 @@ void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlador
             break;
             
         case 22: // strrl
+            if (cpu->PSW.modo == MODO_USUARIO) {
+                // Un usuario NO puede cambiar su propio registro limite
+                lanzar_interrupcion(INT_INST_INVALIDA); 
+                break;
+            }
             cpu->RL = cpu->AC;
             log_operacion("STRRL", cpu->AC, cpu->RL, cpu->RL);
             break;
@@ -311,25 +369,92 @@ void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlador
             break;
             
         case 24: // strsp
+
+            // Verificar si estamos en MODO USUARIO
+            if (cpu->PSW.modo == MODO_USUARIO) {
+                // Calculamos dónde caería físicamente ese puntero
+                int dir_fisica_nueva = cpu->RB + cpu->AC;
+                
+                // Verificamos "las direcciones": ¿Está entre RB y RL?
+                if (!cpu_verificar_memoria(cpu, dir_fisica_nueva)) {
+                    // Si el usuario intenta poner el SP fuera de su memoria asignada
+                    lanzar_interrupcion(INT_DIR_INVALIDA); 
+                    break; // No actualizamos el SP
+                }
+            }
             cpu->SP = cpu->AC;
             log_operacion("STRSP", cpu->AC, cpu->SP, cpu->SP);
             break;
             
         case 25: // psh
-            cpu->SP++;
-            memoria[cpu->SP] = cpu->AC;
-            log_operacion("PSH", cpu->AC, cpu->SP, memoria[cpu->SP]);
+            // Calcular la próxima posición del SP
+            int proximo_sp = cpu->SP + 1;
+            dir_fisica = proximo_sp;
+
+            // Verificar si estamos en MODO USUARIO
+            if (cpu->PSW.modo == MODO_USUARIO) {
+
+                dir_fisica = cpu->RB + proximo_sp;
+                // Verificar si esa dirección física es válida para este proceso
+                if (!cpu_verificar_memoria(cpu, dir_fisica)) {
+                    // Si la direccion fisica es mayor del RL (Registro Límite), es un error de direccionamiento
+                    lanzar_interrupcion(INT_DIR_INVALIDA); 
+                    break; 
+                }
+            } else {
+                // En MODO KERNEL, solo se verifica si la direccion fisica es mayor que la memoria
+                if (dir_fisica >= TAM_MEMORIA) {
+                    lanzar_interrupcion(INT_OVERFLOW); // O INT_DIR_INVALIDA según prefieras
+                    break;
+                }
+            }
+
+            //  Ejecutar la operación 
+            cpu->SP++; // Actualizar el registro SP
+            memoria[dir_fisica] = cpu->AC; // Guardar el AC en la memoria
+            
+            log_operacion("PSH", cpu->AC, cpu->SP, memoria[dir_fisica]);
             break;
             
         case 26: // pop
-            cpu->AC = memoria[cpu->SP];
-            cpu->SP--;
+            // Verificar Underflow (Pila vacía)
+            if (cpu->SP <= 0) {
+                lanzar_interrupcion(INT_UNDERFLOW);
+                break;
+            }
+
+            dir_fisica = cpu->SP;
+
+            // Verificar si estamos en MODO USUARIO
+            if (cpu->PSW.modo == MODO_USUARIO) {
+                dir_fisica = cpu->RB + cpu->SP;
+
+                // Verificar si la direccion fisica es valida
+                if (!cpu_verificar_memoria(cpu, dir_fisica)) {
+                    lanzar_interrupcion(INT_DIR_INVALIDA);
+                    break;
+                }
+            } else {
+                if (dir_fisica >= TAM_MEMORIA) {
+                    lanzar_interrupcion(INT_OVERFLOW);
+                    break;
+                }
+            }
+
+
+            // 3. Ejecutar la operación
+            cpu->AC = memoria[dir_fisica]; // Leemos de la dirección física
+            cpu->SP--; // Bajamos el puntero
+            
             log_operacion("POP", cpu->AC, cpu->SP, cpu->AC);
             break;
             
         case 27: // j - salto incondicional
-            cpu->PSW.pc = inst.valor;
-            log_operacion("J", cpu->PSW.pc, inst.valor, cpu->PSW.pc);
+            operando = cpu_obtener_operando(cpu, inst, memoria);
+            if (!interrupcion_pendiente) {
+                cpu_saltar(cpu, operando);
+                log_operacion("J", 0, operando, cpu->PSW.pc);
+            }
             break;
             
         case 28: // sdmap - establecer pista
@@ -353,7 +478,24 @@ void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlador
             break;
             
         case 32: // sdmam - establecer direccion memoria
-            dma_set_direccion(dma, inst.valor);
+            int dir_dma = inst.valor;
+
+            // Verificar si estamos en MODO USUARIO
+            if (cpu->PSW.modo == MODO_USUARIO) {
+                // Obtener la direccion fisica
+                dir_fisica = cpu->RB + dir_dma;
+
+                // Verificar que la dirección física cae dentro del proceso
+                if (!cpu_verificar_memoria(cpu, dir_fisica)) {
+                    lanzar_interrupcion(INT_DIR_INVALIDA);
+                    break; 
+                }
+                
+                dir_dma = dir_fisica;
+            }
+            
+            // Configurar el DMA con la dirección (física si es usuario, absoluta si es kernel)
+            dma_set_direccion(dma, dir_dma);
             log_operacion("SDMAM", 0, inst.valor, 0);
             break;
             
@@ -363,7 +505,7 @@ void cpu_execute(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlador
             break;
             
         default:
-            lanzar_interrupcion(INT_INST_INVALID);
+            lanzar_interrupcion(INT_INST_INVALIDA);
             log_error("Instruccion invalida", inst.codigo_op);
             break;
     }
@@ -388,32 +530,61 @@ PSW_t cpu_palabra_a_psw(palabra_t palabra) {
 
  //Se usa cuando ocurre una interrupcion, guardamos todo para que el SO pueda retomar
 void cpu_salvar_contexto(CPU_t *cpu, palabra_t *memoria) {
-    // Guardar registros importantes en la pila
-    memoria[++cpu->SP] = cpu->AC;       // Sube el puntero de pila y guarda el AC
-    memoria[++cpu->SP] = cpu->RX;       // Sube el puntero y guarda el Registro X
-    memoria[++cpu->SP] = cpu_psw_a_palabra(cpu->PSW);  // Guarda el estado completo (PSW) empaquetado
+    // Determinamos si el SP es relativo (Usuario) o absoluto (Kernel)
+    
+    int base = (cpu->PSW.modo == MODO_USUARIO) ? cpu->RB : 0;
+
+    // Sube el puntero de pila y guarda el AC
+    cpu->SP++;
+    int dir_fisica = base + cpu->SP;
+    memoria[dir_fisica] = cpu->AC;
+    
+    // Sube el puntero y guarda el RX
+    cpu->SP++;
+    dir_fisica = base + cpu->SP;
+    memoria[dir_fisica] = cpu->RX;
+    
+    // Guardar PSW
+    cpu->SP++;
+    dir_fisica = base + cpu->SP;
+    memoria[dir_fisica] = cpu_psw_a_palabra(cpu->PSW);
 }
 
 //saca los valores de la pila para que la CPU siga exactamente donde se quedo
 void cpu_restaurar_contexto(CPU_t *cpu, palabra_t *memoria) {
-    // Restaurar registros desde la pila
-    cpu->PSW = cpu_palabra_a_psw(memoria[cpu->SP--]);  // Recupera y desglosa el PSW, luego baja la pila
-    cpu->RX = memoria[cpu->SP--];                      // Recupera el RX y baja la pila
-    cpu->AC = memoria[cpu->SP--];                      // Recupera el AC y baja la pila
+    int base = (cpu->RB >= MEM_SO) ? cpu->RB : 0;
+
+    // Recuperar PSW
+    int dir_fisica = base + cpu->SP;
+    palabra_t psw_raw = memoria[dir_fisica];
+
+    // Recupera y desglosa el PSW, luego baja la pila
+    cpu->PSW = cpu_palabra_a_psw(psw_raw);
+    cpu->SP--;
+    
+    // Recuperar RX
+    dir_fisica = base + cpu->SP;
+    cpu->RX = memoria[dir_fisica];
+    cpu->SP--;
+    
+    // Recuperar AC
+    dir_fisica = base + cpu->SP;
+    cpu->AC = memoria[dir_fisica];
+    cpu->SP--;
 }
 
 void cpu_ciclo_instruccion(CPU_t *cpu, palabra_t *memoria, ControladorDMA_t *dma) {
     // Fase de busqueda
-    cpu_fetch(cpu, memoria);
+    cpu_busqueda(cpu, memoria);
 
     // Si el fetch lanzó una interrupción (ej. fuera de límites), abortamos el ciclo
-    if (g_interrupcion_pendiente) {
+    if (interrupcion_pendiente) {
         return; 
     }
     
     // Fase de decodificacion
-    Instruccion_t inst = cpu_decode(cpu->IR);
+    Instruccion_t inst = cpu_decodificar_instruccion(cpu->IR);
     
     // Fase de ejecucion
-    cpu_execute(cpu, inst, memoria, dma);
+    cpu_ejecutar(cpu, inst, memoria, dma);
 }

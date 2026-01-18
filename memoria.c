@@ -3,14 +3,16 @@
 #include <stdio.h>
 #include <string.h>
 
-void memoria_init(Memoria_t *mem) {
+void memoria_inicializar(Memoria_t *mem) {
     int i;
+
+    // Pone toda la memoria en 0
     for (i = 0; i < TAM_MEMORIA; i++) {
         mem->datos[i] = 0;
         mem->ocupado[i] = 0;
     }
     
-    // Marcar zona de SO como ocupada
+    // Marca la zona como area reservada para el Sistema Operativo
     for (i = 0; i < MEM_SO; i++) {
         mem->ocupado[i] = 1;
     }
@@ -36,9 +38,9 @@ void memoria_escribir(Memoria_t *mem, int direccion, palabra_t dato) {
 
 int memoria_cargar_programa(Memoria_t *mem, const char *archivo, int dir_inicio, int *cant_palabras) {
     FILE *fp;
-    char linea[256];
+    char linea[100];
     int num_palabras = 0;
-    char nombre_prog[100];
+    char nombre_prog[256];
     int posicion = dir_inicio;
     int en_codigo = 0;
     
@@ -85,10 +87,13 @@ int memoria_cargar_programa(Memoria_t *mem, const char *archivo, int dir_inicio,
                 return -1;
             }
             
+            // Guarda la palabra en la memoria
             mem->datos[posicion] = instruccion;
+            
+            // Marca la posicion de memoria como ocupada
             mem->ocupado[posicion] = 1;
             
-            char msg[200];
+            char msg[1000];
             sprintf(msg, "Cargado en memoria[%d]: %08d", posicion, instruccion);
             log_mensaje(msg);
             
@@ -102,7 +107,7 @@ int memoria_cargar_programa(Memoria_t *mem, const char *archivo, int dir_inicio,
         *cant_palabras = num_palabras;
     }
     
-    char msg[200];
+    char msg[1000];
     sprintf(msg, "Programa '%s' cargado: %d palabras desde posicion %d", 
             nombre_prog, num_palabras, dir_inicio);
     log_mensaje(msg);

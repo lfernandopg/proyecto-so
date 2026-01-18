@@ -4,7 +4,7 @@
 #include "tipos.h"
 
 // Inicializa el sistema de logging
-void log_init(void);
+void log_inicializar(void);
 
 // Cierra el archivo de log
 void log_close(void);
@@ -13,7 +13,7 @@ void log_close(void);
 void log_mensaje(const char *mensaje);
 
 // Registra una operacion
-void log_operacion(const char *op, palabra_t op1, palabra_t op2, palabra_t resultado);
+void log_operacion(const char *op, palabra_t op1, palabra_t op2, palabra_t res);
 
 // Registra un error
 void log_error(const char *mensaje, int codigo);

@@ -14,13 +14,13 @@
 #define MODO_KERNEL 1
 
 // Codigos de interrupcion
-#define INT_SYSCHECK_INVALID 0
-#define INT_CODE_INVALID 1
+#define INT_COD_SIST_INVALIDO 0
+#define INT_COD_INVALIDO 1
 #define INT_SYSCALL 2
 #define INT_RELOJ 3
-#define INT_IO_FINISH 4
-#define INT_INST_INVALID 5
-#define INT_DIR_INVALID 6
+#define INT_IO_FINALIZADA 4
+#define INT_INST_INVALIDA 5
+#define INT_DIR_INVALIDA 6
 #define INT_UNDERFLOW 7
 #define INT_OVERFLOW 8
 
@@ -33,7 +33,7 @@
 #define DIR_INMEDIATO 1    // Los ultimos 5 digitos son el dato
 #define DIR_INDEXADO 2     // Suma del contenido actual del AC + el valor de la instruccion, va a esa direccion y el contenido lo guarda en AC
  
-// Codigos de condicion: Muestran el resultado de la operacion aritmetica mas reciente y se ve reflejado en el PSW
+// Codigos de condicion: Muestran el res de la operacion aritmetica mas reciente y se ve reflejado en el PSW
 #define CC_IGUAL 0
 #define CC_MENOR 1
 #define CC_MAYOR 2
@@ -58,7 +58,7 @@ typedef int32_t palabra_t;
 
 // Registro PSW
 typedef struct {
-    int codigo_condicion;  // 1 digito: resultado de las operaciones aritmeticas
+    int codigo_condicion;  // 1 digito: res de las operaciones aritmeticas
     int modo;              // 1 digito: 0 es modo usuario y 1 modo privilegiado 
     int interrupciones;    // 1 digito: 0 si estan desabilitadas y 1 si estan habilitadas
     int pc;                // 5 digitos: direccion a la proxima instruccion a leer

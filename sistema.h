@@ -22,7 +22,7 @@ typedef struct {
 } Sistema_t;
 
 // Inicializa el sistema
-void sistema_init(Sistema_t *sys);
+void sistema_inicializar(Sistema_t *sys);
 
 // Ejecuta un programa
 void sistema_ejecutar_programa(Sistema_t *sys, const char *archivo, int modo_debug);
@@ -31,7 +31,7 @@ void sistema_ejecutar_programa(Sistema_t *sys, const char *archivo, int modo_deb
 void sistema_ciclo(Sistema_t *sys);
 
 // Limpia recursos del sistema
-void sistema_cleanup(Sistema_t *sys);
+void sistema_limpiar(Sistema_t *sys);
 
 // Consola interactiva
 void sistema_consola(Sistema_t *sys);

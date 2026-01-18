@@ -9,11 +9,11 @@ typedef struct {
 } VectorInterrupciones_t;
 
 // Variables globales para control de interrupciones
-extern int g_interrupcion_pendiente;
-extern int g_codigo_interrupcion;
+extern int interrupcion_pendiente;
+extern int codigo_interrupcion;
 
 // Inicializa el vector de interrupciones
-void interrupciones_init(VectorInterrupciones_t *vec);
+void interrupciones_inicializar(VectorInterrupciones_t *vec);
 
 // Lanza una interrupcion
 void lanzar_interrupcion(int codigo);
