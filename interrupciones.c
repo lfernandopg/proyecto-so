@@ -11,6 +11,8 @@ void interrupciones_init(VectorInterrupciones_t *vec) {
     for (i = 0; i < 9; i++) {
         vec->manejadores[i] = 0; // Direcciones por defecto
     }
+    g_interrupcion_pendiente = 0;
+    g_codigo_interrupcion = 0;
     log_mensaje("Vector de interrupciones inicializado");
 }
 

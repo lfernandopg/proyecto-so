@@ -23,10 +23,19 @@ void cpu_init(CPU_t *cpu) {
     log_mensaje("CPU inicializada");
 }
 
-//------------------------------------------------------CICLOS DE INSTRUCCIÓN DE LA CPU----------------------------------------------------------------------------------
+//------------------------------------------------------CICLOS DE INSTRUCCIoN DE LA CPU----------------------------------------------------------------------------------
 
 
 void cpu_fetch(CPU_t *cpu, palabra_t *memoria) {  //Indica lo primero que debe hacer la CPU
+    // Verificar proteccion de memoria (si estamos en modo usuario)
+    if (cpu->PSW.modo == MODO_USUARIO) {
+        // Asumiendo que tu PC es absoluto (basado en tu codigo actual)
+        if (cpu->PSW.pc > cpu->RL || cpu->PSW.pc < cpu->RB) {
+            lanzar_interrupcion(INT_DIR_INVALID); // Codigo 6
+            return; // No incrementar PC ni leer instrucciones basura
+        }
+    }
+
     // MAR obtiene PC
     cpu->MAR = cpu->PSW.pc;
     
@@ -68,7 +77,7 @@ int cpu_calcular_direccion(CPU_t *cpu, Instruccion_t inst) {     //Calcula la di
             direccion = -1; // No aplica ya que la direccion es el dato directamente
             break;
         case DIR_INDEXADO:
-            direccion = cpu->AC + inst.valor;   //Suma el contenido del registro AC + el valor de la instrucción.
+            direccion = cpu->AC + inst.valor;   //Suma el contenido del registro AC + el valor de la instruccion.
             break;
     }
     
@@ -396,6 +405,11 @@ void cpu_restaurar_contexto(CPU_t *cpu, palabra_t *memoria) {
 void cpu_ciclo_instruccion(CPU_t *cpu, palabra_t *memoria, ControladorDMA_t *dma) {
     // Fase de busqueda
     cpu_fetch(cpu, memoria);
+
+    // Si el fetch lanzó una interrupción (ej. fuera de límites), abortamos el ciclo
+    if (g_interrupcion_pendiente) {
+        return; 
+    }
     
     // Fase de decodificacion
     Instruccion_t inst = cpu_decode(cpu->IR);

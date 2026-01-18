@@ -27,6 +27,8 @@ void sistema_init(Sistema_t *sys) {
 //Recibe el sistema, el nombre del archivo a ejecutar y una bandera que indica si se activara el modo debugger.
 void sistema_ejecutar_programa(Sistema_t *sys, const char *archivo, int modo_debug) {
     g_modo_debug = modo_debug;
+    // Resetear estado de interrupciones antes de empezar
+    interrupciones_init(&sys->vector_int);
     int cant_palabras = 0; // Variable para recibir el tamaño
     // Cargar programa en memoria
     int dir_inicio = memoria_cargar_programa(&sys->memoria, archivo, MEM_SO, &cant_palabras);
@@ -44,7 +46,7 @@ void sistema_ejecutar_programa(Sistema_t *sys, const char *archivo, int modo_deb
     if (cant_palabras > 0) {
         sys->cpu.RL = sys->cpu.RB + cant_palabras - 1;
     } else {
-        // Por seguridad si no se leyó bien se asigna hasta el final de memoria
+        // Por seguridad si no se leyo bien se asigna hasta el final de memoria
         sys->cpu.RL = TAM_MEMORIA - 1;
     }
      
@@ -73,8 +75,37 @@ void sistema_ejecutar_programa(Sistema_t *sys, const char *archivo, int modo_deb
 void sistema_ciclo(Sistema_t *sys) {
     // Verificar si hay interrupciones pendientes
     if (g_interrupcion_pendiente) {
+        // Si ocurre una interrupcion y no hay un manejador cargado en el vector
+        if (sys->vector_int.manejadores[g_codigo_interrupcion] == 0) {
+            
+            // Caso SVC (Codigo 2): El programa hace una llamada al sistema operativo.
+            if (g_codigo_interrupcion == INT_SYSCALL) {
+                // Si AC es 0, el programa solicita terminar.
+                // Esta es una convencion que se esta definiendo para la terminacion del programa
+                if (sys->cpu.AC == 0) {
+                    log_mensaje("Programa finalizado exitosamente via SVC (AC=0)");
+                    printf("\n>>> Programa finalizado (Llamada al sistema 0: EXIT) <<<\n");
+                    sys->ejecutando = 0;
+                    return;
+                } else {
+                    log_mensaje("Llamada al sistema no reconocida");
+                }
+            }
+            
+            // Caso Direccionamiento Invalido (Codigo 6): El PC se salio de RL.
+            if (g_codigo_interrupcion == INT_DIR_INVALID) {
+                log_mensaje("ERROR: Violacion de limites de memoria (PC > RL)");
+                printf("\n>>> ERROR: Direccionamiento invalido. Simulacion abortada. <<<\n");
+                sys->ejecutando = 0;
+                return;
+            }
+        }
+        
+        // Si hay manejador o no es critica, se procesa normalmente
         procesar_interrupcion(&sys->cpu, sys->memoria.datos, &sys->vector_int);
     }
+
+    if (!sys->ejecutando) return;
     
     // Arbitraje del bus para CPU
     pthread_mutex_lock(&sys->mutex_bus);  // La CPU pide permiso exclusivo para usar el bus
