@@ -40,7 +40,7 @@ void cpu_busqueda(CPU_t *cpu, palabra_t *memoria) {  //Indica lo primero que deb
         if (cpu->PSW.pc >= cpu->RX) {
             // Se considera una violacion de acceso o instruccion invalida.
             // Usamos INT_DIR_INVALIDA porque estamos accediendo a una zona de memoria prohibida para ejecucion.
-            log_error("SEGURIDAD: Intento de ejecucion en la pila", cpu->PSW.pc);
+            log_error("Intento de ejecucion en la pila", cpu->PSW.pc);
             lanzar_interrupcion(INT_DIR_INVALIDA);
             return;
         }
@@ -204,6 +204,7 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
         case 3: // divi
             operando = cpu_obtener_operando(cpu, inst, memoria);
             if (operando == 0) {
+                log_operacion("DIVI", cpu->AC, operando, 0);
                 lanzar_interrupcion(INT_OVERFLOW);
             } else {
                 res = cpu->AC / operando;
@@ -304,8 +305,8 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
             break;
             
         case 13: // svc
-            lanzar_interrupcion(INT_SYSCALL);
             log_operacion("SVC", cpu->AC, 0, 0);
+            lanzar_interrupcion(INT_SYSCALL);
             break;
             
         case 14: // retrn
@@ -332,23 +333,40 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
             break;
             
         case 15: // hab
+            if (cpu->PSW.modo == MODO_USUARIO) {
+                // Un usuario NO puede habilitar las interrupciones
+                lanzar_interrupcion(INT_INST_INVALIDA); 
+                break;
+            }
             cpu->PSW.interrupciones = INT_HABILITADAS;
             log_mensaje("Interrupciones habilitadas");
             break;
             
         case 16: // dhab
+            if (cpu->PSW.modo == MODO_USUARIO) {
+                // Un usuario NO puede desabilitar las interrupciones
+                lanzar_interrupcion(INT_INST_INVALIDA); 
+                break;
+            }
             cpu->PSW.interrupciones = INT_DESHABILITADAS;
             log_mensaje("Interrupciones deshabilitadas");
             break;
             
         case 17: // tti - establecer tiempo de reloj
+            if (cpu->PSW.modo == MODO_USUARIO) {
+                // Un usuario NO puede establecer el tiempo de reloj
+                lanzar_interrupcion(INT_INST_INVALIDA); 
+                break;
+            }
             // Se maneja en el sistema principal
             log_operacion("TTI", inst.valor, 0, 0);
             break;
             
         case 18: // chmod
-            if (cpu->PSW.modo == MODO_KERNEL) {
-                cpu->PSW.modo = MODO_USUARIO;
+            if (cpu->PSW.modo == MODO_USUARIO) {
+                // Un usuario NO puede cambiar su propio modo
+                lanzar_interrupcion(INT_INST_INVALIDA);
+                break;
             }
             log_operacion("CHMOD", cpu->PSW.modo, 0, 0);
             break;
@@ -478,21 +496,41 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
             break;
             
         case 28: // sdmap - establecer pista
+            if (cpu->PSW.modo == MODO_USUARIO) {
+                // Un usuario NO puede establecer la pista del DMA
+                lanzar_interrupcion(INT_INST_INVALIDA); 
+                break;
+            }
             dma_set_pista(dma, inst.valor);
             log_operacion("SDMAP", 0, inst.valor, 0);
             break;
             
         case 29: // sdmac - establecer cilindro
+            if (cpu->PSW.modo == MODO_USUARIO) {
+                // Un usuario NO puede establecer el cilindro del DMA
+                lanzar_interrupcion(INT_INST_INVALIDA); 
+                break;
+            }
             dma_set_cilindro(dma, inst.valor);
             log_operacion("SDMAC", 0, inst.valor, 0);
             break;
             
         case 30: // sdmas - establecer sector
+            if (cpu->PSW.modo == MODO_USUARIO) {
+                // Un usuario NO puede establecer el sector del DMA
+                lanzar_interrupcion(INT_INST_INVALIDA); 
+                break;
+            }
             dma_set_sector(dma, inst.valor);
             log_operacion("SDMAS", 0, inst.valor, 0);
             break;
             
         case 31: // sdmaio - establecer operacion (0=Leer, 1=Escribir)
+            if (cpu->PSW.modo == MODO_USUARIO) {
+                // Un usuario NO puede establecer la operacion del DMA
+                lanzar_interrupcion(INT_INST_INVALIDA); 
+                break;
+            }
             dma_set_operacion(dma, inst.valor);
             log_operacion("SDMAIO", 0, inst.valor, 0);
             break;
@@ -500,26 +538,23 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
         case 32: // sdmam - establecer direccion memoria
             int dir_dma = inst.valor;
 
-            // Verificar si estamos en MODO USUARIO
             if (cpu->PSW.modo == MODO_USUARIO) {
-                // Obtener la direccion fisica
-                dir_fisica = cpu->RB + dir_dma;
-
-                // Verificar que la direccion física cae dentro del proceso
-                if (!cpu_verificar_memoria(cpu, dir_fisica)) {
-                    lanzar_interrupcion(INT_DIR_INVALIDA);
-                    break; 
-                }
-                
-                dir_dma = dir_fisica;
+                // Un usuario NO puede establecer la direccion del DMA
+                lanzar_interrupcion(INT_INST_INVALIDA); 
+                break;
             }
             
-            // Configurar el DMA con la direccion (física si es usuario, absoluta si es kernel)
+            // Configurar el DMA con la direccion
             dma_set_direccion(dma, dir_dma);
             log_operacion("SDMAM", 0, inst.valor, 0);
             break;
             
         case 33: // sdmaon - iniciar DMA
+            if (cpu->PSW.modo == MODO_USUARIO) {
+                // Un usuario NO puede iniciar el DMA
+                lanzar_interrupcion(INT_INST_INVALIDA); 
+                break;
+            }
             dma_iniciar(dma);
             log_operacion("SDMAON", 0, 0, 0);
             break;

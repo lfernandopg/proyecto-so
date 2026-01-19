@@ -51,6 +51,10 @@ void sistema_ejecutar_programa(Sistema_t *sys, const char *archivo, int modo_deb
     // Configurar RX como la base de la pila (inicia justo donde termina el codigo del programa)
     sys->cpu.RX = sys->cpu.RB + cant_palabras;
 
+    if (dir_inicio >= MEM_SO) {
+        sys->cpu.PSW.modo = MODO_USUARIO;
+    }
+
     //Establece el Registro Limite (RL), 
     // Para que el programa tenga acceso hasta el final de su espacio de memoria incluyendo la pila
     // Por ejemplo si cant_palabras es 7, el tamanio de la pila es 2 y RB esta en 300 

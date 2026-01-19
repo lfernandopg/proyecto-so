@@ -29,8 +29,8 @@ void lanzar_interrupcion(int codigo) {
     char msg[200];
 sprintf(msg, "INTERRUPCION ARROJADA: Codigo %d - %s", 
             codigo, obtener_nombre_interrupcion(codigo));
-    log_interrupcion(msg);
-    printf("\n*** %s ***\n", msg);
+    log_mensaje(msg);
+    printf("Interrupcion: %s\n", msg);
 }
 
 const char* obtener_nombre_interrupcion(int codigo) {
@@ -66,7 +66,8 @@ void procesar_interrupcion(CPU_t *cpu, palabra_t *memoria, VectorInterrupciones_
     // Verificar si interrupciones estan habilitadas
     if (cpu->PSW.interrupciones == INT_DESHABILITADAS) {
         // Solo algunas interrupciones criticas se procesan
-        if (codigo_interrupcion != INT_OVERFLOW && 
+        if (codigo_interrupcion != INT_OVERFLOW &&
+            codigo_interrupcion != INT_UNDERFLOW && 
             codigo_interrupcion != INT_DIR_INVALIDA &&
             codigo_interrupcion != INT_INST_INVALIDA) {
             return; // Postponer interrupcion
@@ -76,7 +77,7 @@ void procesar_interrupcion(CPU_t *cpu, palabra_t *memoria, VectorInterrupciones_
     char msg[200];
     sprintf(msg, "PROCESANDO INTERRUPCION: Codigo %d - %s", 
             codigo_interrupcion, obtener_nombre_interrupcion(codigo_interrupcion));
-    log_interrupcion(msg);
+    log_mensaje(msg);
     
     // Guarda el estado del cpu
     cpu_salvar_contexto(cpu, memoria);
