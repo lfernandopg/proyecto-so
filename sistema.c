@@ -53,6 +53,8 @@ void sistema_ejecutar_programa(Sistema_t *sys, const char *archivo, int modo_deb
 
     if (dir_inicio >= MEM_SO) {
         sys->cpu.PSW.modo = MODO_USUARIO;
+    } else {
+        sys->cpu.PSW.modo = MODO_KERNEL;
     }
 
     //Establece el Registro Limite (RL), 
