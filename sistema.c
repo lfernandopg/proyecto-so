@@ -37,18 +37,28 @@ void sistema_ejecutar_programa(Sistema_t *sys, const char *archivo, int modo_deb
         return;
     }
     
+    // Validar que exista espacio suficiente para el codigo y la pila
+    if (dir_inicio + cant_palabras + TAM_PILA > TAM_MEMORIA) {
+        printf("ERROR CRITICO: Memoria insuficiente para cargar el programa y reservar la pila.\n");
+        log_error("Memoria insuficiente para programa + pila", 0);
+        return;
+    }
+
     // Configurar CPU para ejecutar desde esa direccion
     sys->cpu.PSW.pc = dir_inicio;     //Apunta a la PC a la primera instruccion del programa.
     sys->cpu.RB = dir_inicio;        //Establece el Registro Base (RB) al inicio de donde se cargo el programa.
     
-    //Establece el Registro Limite (RL), para que el proceso tenga acceso hasta el final de su espacio de memoria
-    // Por ejemplo si cant_palabras es 7 y RB es 300 -> RL = 300 + 7 - 1 = 306.
-    if (cant_palabras > 0) {
-        sys->cpu.RL = sys->cpu.RB + cant_palabras - 1;
-    } else {
-        // Por seguridad si no se leyo bien se asigna hasta el final de memoria
-        sys->cpu.RL = TAM_MEMORIA - 1;
-    }
+    // Configurar RX como la base de la pila (inicia justo donde termina el codigo del programa)
+    sys->cpu.RX = sys->cpu.RB + cant_palabras;
+
+    //Establece el Registro Limite (RL), 
+    // Para que el programa tenga acceso hasta el final de su espacio de memoria incluyendo la pila
+    // Por ejemplo si cant_palabras es 7, el tamanio de la pila es 2 y RB esta en 300 
+    // Entonces RL es RB  + cant_palabras + TAM_PILA - 1 por lo que RL = 308.
+    sys->cpu.RL = sys->cpu.RX + TAM_PILA - 1;
+
+    // Inicializar SP (Puntero de pila relativo a RX)
+    sys->cpu.SP = 0;
      
     sys->ejecutando = 1;
     

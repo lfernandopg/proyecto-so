@@ -5,6 +5,7 @@
 
 // Tamano de palabra: 8 digitos decimales
 #define TAM_PALABRA 8
+#define TAM_PILA 50 // Tamanio reservado para la pila
 #define TAM_MEMORIA 2000 // Tamanio de la memoria ram es de 2000 posiciones
 #define MEM_SO 300       //300 posiciones reservadas para el SO
 #define MEM_USUARIO (TAM_MEMORIA - MEM_SO)    // Posiciones disponibles para el usuario 

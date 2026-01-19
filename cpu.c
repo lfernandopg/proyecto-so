@@ -34,6 +34,16 @@ void cpu_busqueda(CPU_t *cpu, palabra_t *memoria) {  //Indica lo primero que deb
             lanzar_interrupcion(INT_DIR_INVALIDA); // Arrojar excepcion codigo 6
             return;
         }
+
+        // Verificar que no se ejecute codigo en la pila
+        // La pila comienza en RX. Si PC >= RX, estamos intentando ejecutar datos de pila como instrucciones.
+        if (cpu->PSW.pc >= cpu->RX) {
+            // Se considera una violacion de acceso o instruccion invalida.
+            // Usamos INT_DIR_INVALIDA porque estamos accediendo a una zona de memoria prohibida para ejecucion.
+            log_error("SEGURIDAD: Intento de ejecucion en la pila", cpu->PSW.pc);
+            lanzar_interrupcion(INT_DIR_INVALIDA);
+            return;
+        }
     }
 
     // MAR obtiene PC
@@ -230,6 +240,16 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
             break;
             
         case 7: // strrx
+            if (cpu->PSW.modo == MODO_USUARIO) {
+                // Si el usuario intenta cambiar la base de su pila.
+                // Verificamos que la nueva direccion base (contenido de AC) 
+                // caiga dentro de su particion de memoria asignada (RB a RL).
+                if (!cpu_verificar_memoria(cpu, cpu->AC)) {
+                    // Si intenta apuntar fuera de su memoria, lanzamos error y abortamos
+                    lanzar_interrupcion(INT_DIR_INVALIDA);
+                    break;
+                }
+            }
             cpu->RX = cpu->AC;
             log_operacion("STRRX", cpu->AC, cpu->RX, cpu->RX);
             break;
@@ -242,7 +262,7 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
             break;
             
         case 9: // jmpe
-                if (cpu->PSW.codigo_condicion == CC_IGUAL) {
+            if (cpu->PSW.codigo_condicion == CC_IGUAL) {
                 operando = cpu_obtener_operando(cpu, inst, memoria);
                 
                 if (!interrupcion_pendiente) {
@@ -298,7 +318,7 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
             int dir_stack = cpu->SP;
             
             if (cpu->PSW.modo == MODO_USUARIO) {
-                dir_stack = cpu->RB + cpu->SP;
+                dir_stack = cpu->RX + cpu->SP;
                 if (!cpu_verificar_memoria(cpu, dir_stack)) {
                     lanzar_interrupcion(INT_DIR_INVALIDA);
                     break;
@@ -372,8 +392,8 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
 
             // Verificar si estamos en MODO USUARIO
             if (cpu->PSW.modo == MODO_USUARIO) {
-                // Calculamos dónde caería físicamente ese puntero
-                int dir_fisica_nueva = cpu->RB + cpu->AC;
+                // Calculamos donde caería físicamente ese puntero
+                int dir_fisica_nueva = cpu->RX + cpu->AC;
                 
                 // Verificamos "las direcciones": ¿Está entre RB y RL?
                 if (!cpu_verificar_memoria(cpu, dir_fisica_nueva)) {
@@ -387,15 +407,15 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
             break;
             
         case 25: // psh
-            // Calcular la próxima posición del SP
+            // Calcular la proxima posicion del SP
             int proximo_sp = cpu->SP + 1;
             dir_fisica = proximo_sp;
 
             // Verificar si estamos en MODO USUARIO
             if (cpu->PSW.modo == MODO_USUARIO) {
 
-                dir_fisica = cpu->RB + proximo_sp;
-                // Verificar si esa dirección física es válida para este proceso
+                dir_fisica = cpu->RX + proximo_sp;
+                // Verificar si esa direccion física es válida para este proceso
                 if (!cpu_verificar_memoria(cpu, dir_fisica)) {
                     // Si la direccion fisica es mayor del RL (Registro Límite), es un error de direccionamiento
                     lanzar_interrupcion(INT_DIR_INVALIDA); 
@@ -409,7 +429,7 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
                 }
             }
 
-            //  Ejecutar la operación 
+            //  Ejecutar la operacion 
             cpu->SP++; // Actualizar el registro SP
             memoria[dir_fisica] = cpu->AC; // Guardar el AC en la memoria
             
@@ -427,7 +447,7 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
 
             // Verificar si estamos en MODO USUARIO
             if (cpu->PSW.modo == MODO_USUARIO) {
-                dir_fisica = cpu->RB + cpu->SP;
+                dir_fisica = cpu->RX + cpu->SP;
 
                 // Verificar si la direccion fisica es valida
                 if (!cpu_verificar_memoria(cpu, dir_fisica)) {
@@ -442,8 +462,8 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
             }
 
 
-            // 3. Ejecutar la operación
-            cpu->AC = memoria[dir_fisica]; // Leemos de la dirección física
+            // 3. Ejecutar la operacion
+            cpu->AC = memoria[dir_fisica]; // Leemos de la direccion física
             cpu->SP--; // Bajamos el puntero
             
             log_operacion("POP", cpu->AC, cpu->SP, cpu->AC);
@@ -485,7 +505,7 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
                 // Obtener la direccion fisica
                 dir_fisica = cpu->RB + dir_dma;
 
-                // Verificar que la dirección física cae dentro del proceso
+                // Verificar que la direccion física cae dentro del proceso
                 if (!cpu_verificar_memoria(cpu, dir_fisica)) {
                     lanzar_interrupcion(INT_DIR_INVALIDA);
                     break; 
@@ -494,7 +514,7 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
                 dir_dma = dir_fisica;
             }
             
-            // Configurar el DMA con la dirección (física si es usuario, absoluta si es kernel)
+            // Configurar el DMA con la direccion (física si es usuario, absoluta si es kernel)
             dma_set_direccion(dma, dir_dma);
             log_operacion("SDMAM", 0, inst.valor, 0);
             break;
@@ -532,7 +552,7 @@ PSW_t cpu_palabra_a_psw(palabra_t palabra) {
 void cpu_salvar_contexto(CPU_t *cpu, palabra_t *memoria) {
     // Determinamos si el SP es relativo (Usuario) o absoluto (Kernel)
     
-    int base = (cpu->PSW.modo == MODO_USUARIO) ? cpu->RB : 0;
+    int base = (cpu->PSW.modo == MODO_USUARIO) ? cpu->RX : 0;
 
     // Sube el puntero de pila y guarda el AC
     cpu->SP++;
@@ -552,7 +572,7 @@ void cpu_salvar_contexto(CPU_t *cpu, palabra_t *memoria) {
 
 //saca los valores de la pila para que la CPU siga exactamente donde se quedo
 void cpu_restaurar_contexto(CPU_t *cpu, palabra_t *memoria) {
-    int base = (cpu->RB >= MEM_SO) ? cpu->RB : 0;
+    int base = (cpu->RX >= MEM_SO) ? cpu->RX : 0;
 
     // Recuperar PSW
     int dir_fisica = base + cpu->SP;
@@ -577,7 +597,7 @@ void cpu_ciclo_instruccion(CPU_t *cpu, palabra_t *memoria, ControladorDMA_t *dma
     // Fase de busqueda
     cpu_busqueda(cpu, memoria);
 
-    // Si el fetch lanzó una interrupción (ej. fuera de límites), abortamos el ciclo
+    // Si el fetch lanzo una interrupcion (ej. fuera de límites), abortamos el ciclo
     if (interrupcion_pendiente) {
         return; 
     }
