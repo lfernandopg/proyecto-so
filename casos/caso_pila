@@ -1,0 +1,9 @@
+_start 300
+.NumeroPalabras 6
+.NombreProg test_stack
+04100088
+25000000
+04100000
+26000000
+08100088
+13000000
