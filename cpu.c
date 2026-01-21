@@ -58,11 +58,6 @@ void cpu_busqueda(CPU_t *cpu, palabra_t *memoria) {  //Indica lo primero que deb
     // Obtiene la siguiente instruccion
     cpu->PSW.pc++;
     
-    //Imprime el estado actual de los registros 
-    if (g_modo_debug) {
-        printf("FETCH: MAR=%d, MDR=%08d, IR=%08d, PC=%d\n", 
-               cpu->MAR, cpu->MDR, cpu->IR, cpu->PSW.pc);
-    }
 }
 
 Instruccion_t cpu_decodificar_instruccion(palabra_t instruccion_raw) {
