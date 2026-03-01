@@ -6,6 +6,36 @@
 
 extern int g_modo_debug;
 
+
+// Convierte de Signo-Magnitud a un entero estándar de C
+int sm_a_nativo(palabra_t sm) {
+    int signo = sm / 10000000;       // Extrae el dígito más a la izquierda
+    int magnitud = sm % 10000000;    // Extrae los 7 dígitos restantes
+    
+    if (signo == 1) {
+        return -magnitud;
+    } else {
+        return magnitud;
+    }
+}
+
+// Convierte un entero estándar de C a formato Signo-Magnitud (tu arquitectura)
+palabra_t nativo_a_sm(int valor) {
+    int signo = 0;
+    if (valor < 0) {
+        signo = 1;
+    }
+    
+    int magnitud = abs(valor);
+    
+    // Evitar alterar el dígito de signo si ocurre un desbordamiento grave
+    if (magnitud > 9999999) {
+        magnitud = 9999999; 
+    }
+    
+    return (signo * 10000000) + magnitud;
+}
+
 //Inicializa la CPU a 0 
 void cpu_inicializar(CPU_t *cpu) {
     cpu->AC = 0;
@@ -146,14 +176,14 @@ int cpu_verificar_memoria(CPU_t *cpu, int direccion) {   //Recibe el estado de l
     return (direccion >= cpu->RB && direccion <= cpu->RL);  //verifica que la direccion este entre RB y RL
 }
 
-void cpu_actualizar_cc(CPU_t *cpu, palabra_t res) {
+void cpu_actualizar_cc(CPU_t *cpu, int res_nativo) {
     // Detectar overflow (mas de 7 digitos de magnitud)
-    if (abs(res) > 9999999) {
+    if (abs(res_nativo) > 9999999) {
         cpu->PSW.codigo_condicion = CC_OVERFLOW;   //Detecta un desbordamiento 
         lanzar_interrupcion(INT_OVERFLOW);
-    } else if (res == 0) {              
+    } else if (res_nativo == 0) {              
         cpu->PSW.codigo_condicion = CC_IGUAL;     //El res de la operacion fue 0, el cod de condicion es 0
-    } else if (res < 0) {
+    } else if (res_nativo < 0) {
         cpu->PSW.codigo_condicion = CC_MENOR;     //El res de la operacion es negativo, el cod de condicion 1
     } else {
         cpu->PSW.codigo_condicion = CC_MAYOR;     //El res de la operacion es positivo, el cod de condicion 2
@@ -174,37 +204,64 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
     switch(inst.codigo_op) {
         case 0: // sum
             operando = cpu_obtener_operando(cpu, inst, memoria); //Trae el dato (segun el direccionamiento)
-            res = cpu->AC + operando;                      // Hace la suma 
-            cpu_actualizar_cc(cpu, res);                   // Actualiza el codigo de condicion
-            cpu->AC = res;                                 // Guarda el res en AC
-            log_operacion("SUM", cpu->AC, operando, res);  // Registra la actividad en el log
+            
+            int ac_nat = sm_a_nativo(cpu->AC); // Traducir a enteros nativos en C para hacer la operacion
+            int op_nat = sm_a_nativo(operando);
+            
+            int res_nat = ac_nat + op_nat; // Hace la suma
+            cpu_actualizar_cc(cpu, res_nat); // Actualiza el codigo de condicion
+            
+            res = nativo_a_sm(res_nat); // Transforma a Signo-Magnitud
+            cpu->AC = res; // Guarda el res en AC
+            
+            log_operacion("SUM", cpu->AC, operando, res); // Registra la actividad en el log
             break;
             
         case 1: // res
-            operando = cpu_obtener_operando(cpu, inst, memoria);
-            res = cpu->AC - operando;
-            cpu_actualizar_cc(cpu, res);
-            cpu->AC = res;
-            log_operacion("RES", cpu->AC, operando, res);
+            operando = cpu_obtener_operando(cpu, inst, memoria); //Trae el dato (segun el direccionamiento)
+            
+            int ac_nat = sm_a_nativo(cpu->AC); // Traducir a enteros nativos en C para hacer la operacion
+            int op_nat = sm_a_nativo(operando);
+            
+            int res_nat = ac_nat - op_nat; // Hace la resta
+            cpu_actualizar_cc(cpu, res_nat); // Actualiza el codigo de condicion
+            
+            res = nativo_a_sm(res_nat); // Transforma a Signo-Magnitud
+            cpu->AC = res; // Guarda el res en AC
+            
+            log_operacion("RES", cpu->AC, operando, res); // Registra la actividad en el log
             break;
             
         case 2: // mult
-            operando = cpu_obtener_operando(cpu, inst, memoria);
-            res = cpu->AC * operando;
-            cpu_actualizar_cc(cpu, res);
-            cpu->AC = res;
-            log_operacion("MULT", cpu->AC, operando, res);
+            operando = cpu_obtener_operando(cpu, inst, memoria); //Trae el dato (segun el direccionamiento)
+            
+            int ac_nat = sm_a_nativo(cpu->AC); // Traducir a enteros nativos en C para hacer la operacion
+            int op_nat = sm_a_nativo(operando);
+            
+            int res_nat = ac_nat * op_nat; // Hace la multiplicacion
+            cpu_actualizar_cc(cpu, res_nat); // Actualiza el codigo de condicion
+            
+            res = nativo_a_sm(res_nat); // Transforma a Signo-Magnitud
+            cpu->AC = res; // Guarda el res en AC
+            
+            log_operacion("MULT", cpu->AC, operando, res); // Registra la actividad en el log
             break;
             
         case 3: // divi
             operando = cpu_obtener_operando(cpu, inst, memoria);
-            if (operando == 0) {
+            int op_nat_divi = sm_a_nativo(operando);
+            
+            if (op_nat_divi == 0) {
                 log_operacion("DIVI", cpu->AC, operando, 0);
                 lanzar_interrupcion(INT_OVERFLOW);
             } else {
-                res = cpu->AC / operando;
-                cpu_actualizar_cc(cpu, res);
+                int ac_nat_divi = sm_a_nativo(cpu->AC);
+                int res_nat_divi = ac_nat_divi / op_nat_divi;
+                
+                cpu_actualizar_cc(cpu, res_nat_divi);
+                res = nativo_a_sm(res_nat_divi);
                 cpu->AC = res;
+                
                 log_operacion("DIVI", cpu->AC, operando, res);
             }
             break;
@@ -252,9 +309,14 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
             
         case 8: // comp
             operando = cpu_obtener_operando(cpu, inst, memoria);
-            res = cpu->AC - operando;
-            cpu_actualizar_cc(cpu, res);
-            log_operacion("COMP", cpu->AC, operando, res);
+            
+            // La comparación también debe hacerse con números nativos de C
+            int ac_nat_comp = sm_a_nativo(cpu->AC);
+            int op_nat_comp = sm_a_nativo(operando);
+            
+            int res_nat_comp = ac_nat_comp - op_nat_comp;
+            cpu_actualizar_cc(cpu, res_nat_comp); // Actualiza los códigos de condición
+            log_operacion("COMP", cpu->AC, operando, nativo_a_sm(res_nat_comp));
             break;
             
         case 9: // jmpe
@@ -630,7 +692,7 @@ void cpu_ciclo_instruccion(CPU_t *cpu, palabra_t *memoria, ControladorDMA_t *dma
     // Fase de busqueda
     cpu_busqueda(cpu, memoria);
 
-    // Si el fetch lanzo una interrupcion (ej. fuera de limites), abortamos el ciclo
+    // Si la busqueda lanzo una interrupcion (ej. fuera de limites), abortamos el ciclo
     if (interrupcion_pendiente) {
         return; 
     }
