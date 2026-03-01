@@ -89,6 +89,12 @@ void sistema_ejecutar_programa(Sistema_t *sys, const char *archivo, int modo_deb
 //Esta funcion encapsula lo que pasa en un ciclo de reloj.
 
 void sistema_ciclo(Sistema_t *sys) {
+    // Sincronizar si la CPU ejecutó un TTI
+    if (sys->cpu.nuevo_periodo_reloj > 0) {
+        sys->periodo_reloj = sys->cpu.nuevo_periodo_reloj;
+        sys->cpu.nuevo_periodo_reloj = 0; // Limpiar la bandera
+    }
+    
     // Verificar si hay interrupciones pendientes
     if (interrupcion_pendiente) {
         // Si ocurre una interrupcion y no hay un manejador cargado en el vector

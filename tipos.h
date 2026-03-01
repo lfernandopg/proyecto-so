@@ -76,6 +76,7 @@ typedef struct {
     palabra_t RX;       // Registro base de pila
     palabra_t SP;       // Apuntador de pila
     PSW_t PSW;          // Palabra de estado del sistema
+    int nuevo_periodo_reloj;
 } CPU_t;
 
 // Estructura del DMA

@@ -49,6 +49,7 @@ void cpu_inicializar(CPU_t *cpu) {
     cpu->PSW.modo = MODO_KERNEL;       //La CPU siempre debe incializarse en modo kernel
     cpu->PSW.interrupciones = INT_HABILITADAS;  //La CPU reacciona a señales externas
     cpu->PSW.pc = MEM_SO;              //Comienza a leer donde se carga el SO
+    int nuevo_periodo_reloj = 0;
     
     log_mensaje("CPU inicializada");
 }
@@ -319,7 +320,7 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
             log_operacion("COMP", cpu->AC, operando, nativo_a_sm(res_nat_comp));
             break;
             
-        case 9: // jmpe
+        case 9: // jmpe (Salta si AC == M[SP])
             if (cpu->PSW.codigo_condicion == CC_IGUAL) {
                 operando = cpu_obtener_operando(cpu, inst, memoria);
                 
@@ -330,9 +331,46 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
                 }
             }
             break;
+
+            if (cpu->SP <= 0) { // Verificar que la pila no esté vacía (Underflow)
+                lanzar_interrupcion(INT_UNDERFLOW);
+                break;
+            }
             
-        case 10: // jmpne
-            if (cpu->PSW.codigo_condicion != CC_IGUAL) {
+            dir_fisica = cpu->RX + cpu->SP; // Calcular la dirección física del tope de la pila
+            
+            // Verificar límites de memoria si está en modo usuario
+            if (cpu->PSW.modo == MODO_USUARIO && !cpu_verificar_memoria(cpu, dir_fisica)) {
+                lanzar_interrupcion(INT_DIR_INVALIDA);
+                break;
+            }
+
+            // Comparar utilizando las conversiones a enteros nativos
+            if (sm_a_nativo(cpu->AC) == sm_a_nativo(memoria[dir_fisica])) {
+                operando = cpu_obtener_operando(cpu, inst, memoria);
+                
+                if (!interrupcion_pendiente) {
+                    // Ejecutar el salto
+                    cpu_saltar(cpu, operando);
+                    log_operacion("JMPE", cpu->AC, operando, cpu->PSW.pc);
+                }
+            }
+            break;
+            
+        case 10: // jmpne (Salta si AC != M[SP])
+            if (cpu->SP <= 0) {
+                lanzar_interrupcion(INT_UNDERFLOW);
+                break;
+            }
+            
+            dir_fisica = cpu->RX + cpu->SP;
+            
+            if (cpu->PSW.modo == MODO_USUARIO && !cpu_verificar_memoria(cpu, dir_fisica)) {
+                lanzar_interrupcion(INT_DIR_INVALIDA);
+                break;
+            }
+
+            if (sm_a_nativo(cpu->AC) != sm_a_nativo(memoria[dir_fisica])) {
                 operando = cpu_obtener_operando(cpu, inst, memoria);
                 if (!interrupcion_pendiente) {
                     cpu_saltar(cpu, operando);
@@ -341,8 +379,20 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
             }
             break;
             
-        case 11: // jmplt
-            if (cpu->PSW.codigo_condicion == CC_MENOR) {
+        case 11: // jmplt (Salta si AC < M[SP])
+            if (cpu->SP <= 0) {
+                lanzar_interrupcion(INT_UNDERFLOW);
+                break;
+            }
+            
+            dir_fisica = cpu->RX + cpu->SP;
+            
+            if (cpu->PSW.modo == MODO_USUARIO && !cpu_verificar_memoria(cpu, dir_fisica)) {
+                lanzar_interrupcion(INT_DIR_INVALIDA);
+                break;
+            }
+
+            if (sm_a_nativo(cpu->AC) < sm_a_nativo(memoria[dir_fisica])) {
                 operando = cpu_obtener_operando(cpu, inst, memoria);
                 if (!interrupcion_pendiente) {
                     cpu_saltar(cpu, operando);
@@ -351,8 +401,20 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
             }
             break;
             
-        case 12: // jmpgt
-            if (cpu->PSW.codigo_condicion == CC_MAYOR) {
+        case 12: // jmpgt (Salta si AC > M[SP])
+            if (cpu->SP <= 0) {
+                lanzar_interrupcion(INT_UNDERFLOW);
+                break;
+            }
+            
+            dir_fisica = cpu->RX + cpu->SP;
+            
+            if (cpu->PSW.modo == MODO_USUARIO && !cpu_verificar_memoria(cpu, dir_fisica)) {
+                lanzar_interrupcion(INT_DIR_INVALIDA);
+                break;
+            }
+
+            if (sm_a_nativo(cpu->AC) > sm_a_nativo(memoria[dir_fisica])) {
                 operando = cpu_obtener_operando(cpu, inst, memoria);
                 if (!interrupcion_pendiente) {
                     cpu_saltar(cpu, operando);
@@ -421,6 +483,7 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
                 break;
             }
             // Se maneja en el sistema principal
+            cpu->nuevo_periodo_reloj = inst.valor;
             log_operacion("TTI", inst.valor, 0, 0);
             break;
             
@@ -430,6 +493,7 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
                 lanzar_interrupcion(INT_INST_INVALIDA);
                 break;
             }
+            cpu->PSW.modo = inst.valor;
             log_operacion("CHMOD", cpu->PSW.modo, 0, 0);
             break;
             
