@@ -4,12 +4,6 @@
 #include "tipos.h"
 #include "dma.h"
 
-// Convierte de Signo-Magnitud a un entero estándar de C
-int sm_a_nativo(palabra_t sm);
-
-// Convierte un entero estándar de C a formato Signo-Magnitud (tu arquitectura)
-palabra_t nativo_a_sm(int valor);
-
 // Inicializa la CPU
 void cpu_inicializar(CPU_t *cpu);
 
@@ -38,7 +32,7 @@ void cpu_saltar(CPU_t *cpu, int direccion_destino_relativa);
 int cpu_verificar_memoria(CPU_t *cpu, int direccion);
 
 // Actualiza codigo de condicion
-void cpu_actualizar_cc(CPU_t *cpu, int res_nativo);
+void cpu_actualizar_cc(CPU_t *cpu, palabra_t res);
 
 // Convierte PSW a palabra
 palabra_t cpu_psw_a_palabra(PSW_t psw);

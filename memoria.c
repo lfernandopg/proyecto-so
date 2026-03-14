@@ -36,81 +36,59 @@ void memoria_escribir(Memoria_t *mem, int direccion, palabra_t dato) {
     mem->datos[direccion] = dato;
 }
 
-int memoria_cargar_programa(Memoria_t *mem, const char *archivo, int dir_inicio, int *cant_palabras) {
-    FILE *fp;
-    char linea[100];
-    int num_palabras = 0;
-    char nombre_prog[256];
-    int posicion = dir_inicio;
-    int en_codigo = 0;
-    
-    fp = fopen(archivo, "r");
-    if (!fp) {
-        log_error("No se pudo abrir archivo", 0);
+int memoria_cargar_desde_buffer(Memoria_t *mem, const palabra_t *buffer, int cant_palabras, int dir_inicio) {
+    if (dir_inicio + cant_palabras > TAM_MEMORIA) {
+        log_error("Fallo al escribir en memoria: supera el limite", dir_inicio);
         return -1;
     }
-    
-    while (fgets(linea, sizeof(linea), fp)) {
-        // Eliminar salto de linea
-        linea[strcspn(linea, "\n")] = 0;
-        
-        // Ignorar lineas vacias y comentarios
-        if (strlen(linea) == 0 || linea[0] == '\n') {
-            continue;
-        }
-        
-        if (strncmp(linea, "_start", 6) == 0) {
-            sscanf(linea, "_start %d", &dir_inicio);
-            posicion = dir_inicio;
-            continue;
-        }
-        
-        if (strncmp(linea, ".NumeroPalabras", 15) == 0) {
-            sscanf(linea, ".NumeroPalabras %d", &num_palabras);
-            continue;
-        }
-        
-        if (strncmp(linea, ".NombreProg", 11) == 0) {
-            sscanf(linea, ".NombreProg %s", nombre_prog);
-            en_codigo = 1;
-            continue;
-        }
-        
-        // Cargar instrucciones
-        if (en_codigo && linea[0] >= '0' && linea[0] <= '9') {
-            palabra_t instruccion;
-            sscanf(linea, "%d", &instruccion);
-            
-            if (posicion >= TAM_MEMORIA) {
-                log_error("Memoria insuficiente para cargar programa", posicion);
-                fclose(fp);
-                return -1;
-            }
-            
-            // Guarda la palabra en la memoria
-            mem->datos[posicion] = instruccion;
-            
-            // Marca la posicion de memoria como ocupada
-            mem->ocupado[posicion] = 1;
-            
-            char msg[1000];
-            sprintf(msg, "Cargado en memoria[%d]: %08d", posicion, instruccion);
-            log_mensaje(msg);
-            
-            posicion++;
-        }
-    }
-    
-    fclose(fp);
 
-    if (cant_palabras != NULL) {
-        *cant_palabras = num_palabras;
+    for (int i = 0; i < cant_palabras; i++) {
+        mem->datos[dir_inicio + i] = buffer[i];
+        mem->ocupado[dir_inicio + i] = 1;
+        
+        char msg[200];
+        sprintf(msg, "Cargado en RAM[%d]: %08d", dir_inicio + i, buffer[i]);
+        log_mensaje(msg);
     }
-    
-    char msg[1000];
-    sprintf(msg, "Programa '%s' cargado: %d palabras desde posicion %d", 
-            nombre_prog, num_palabras, dir_inicio);
-    log_mensaje(msg);
     
     return dir_inicio;
+}
+
+int memoria_asignar_espacio(Memoria_t *mem, int tam_requerido) {
+    // Si el tamano excede la particion estatica, falla directamente
+    if (tam_requerido > TAM_PARTICION) {
+        return -1;
+    }
+
+    // Busqueda de una particion libre (Particionamiento estatico puro)
+    for (int p = 0; p < MAX_PROCESOS; p++) {
+        int inicio = MEM_SO + (p * TAM_PARTICION);
+        
+        // Verificamos el bloque buscando la primera partición que no esté ocupada
+        if (mem->ocupado[inicio] == 0) {
+            
+            // Se encontró partición libre. Se marca toda la partición estática como ocupada.
+            for (int i = inicio; i < inicio + TAM_PARTICION; i++) {
+                mem->ocupado[i] = 1;
+            }
+            
+            char msg[200];
+            sprintf(msg, "Memoria asignada (Particion %d): RAM[%d] a RAM[%d]", p + 1, inicio, inicio + TAM_PARTICION - 1);
+            log_mensaje(msg);
+            
+            return inicio; // Retorna la base física
+        }
+    }
+    return -1; // No hay particiones libres
+}
+
+void memoria_liberar_espacio(Memoria_t *mem, int base, int limite) {
+    if (base < MEM_SO || limite >= TAM_MEMORIA || base > limite) return;
+    for (int i = base; i <= limite; i++) {
+        mem->ocupado[i] = 0;
+        mem->datos[i] = 0;
+    }
+    char msg[200];
+    sprintf(msg, "Memoria liberada: RAM[%d] a RAM[%d]", base, limite);
+    log_mensaje(msg);
 }
