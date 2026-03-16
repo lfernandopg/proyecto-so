@@ -178,7 +178,7 @@ void sistema_log(int pid, Estado_t anterior, Estado_t nuevo) {
     const char* nombres[] = {"NUEVO", "LISTO", "EJECUCION", "DORMIDO", "TERMINADO"};
     
     char buffer[256];
-    if (anterior == -1) {
+    if (anterior == (Estado_t)-1) {
         sprintf(buffer, "[ESTADO] Proceso %d: CREADO -> %s", pid, nombres[nuevo]);
     } else {
         sprintf(buffer, "[ESTADO] Proceso %d: %s -> %s", pid, nombres[anterior], nombres[nuevo]);
@@ -458,8 +458,6 @@ void sistema_ciclo(Sistema_t *sys) {
 void sistema_consola(Sistema_t *sys) {
 
     char comando[256];   // Almacenara la linea completa que el usuario escriba.
-    char archivo[256];   // Se usara para guardar el nombre del programa.
-    char modo[20];       // Se usara para guardar el modo si se especifica.
         
     while (1) {
         

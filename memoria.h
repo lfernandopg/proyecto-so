@@ -21,4 +21,13 @@ void memoria_escribir(Memoria_t *mem, int direccion, palabra_t dato);
 // Carga programa desde archivo
 int memoria_cargar_programa(Memoria_t *mem, const char *archivo, int dir_inicio, int *cant_palabras);
 
+// Carga programa desde un buffer
+int memoria_cargar_desde_buffer(Memoria_t *mem, const palabra_t *buffer, int cant_palabras, int dir_inicio);
+
+// Asigna espacio en memoria
+int memoria_asignar_espacio(Memoria_t *mem, int tam_requerido);
+
+// Libera espacio en memoria
+void memoria_liberar_espacio(Memoria_t *mem, int base, int limite);
+
 #endif
