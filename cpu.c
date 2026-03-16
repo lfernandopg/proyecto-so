@@ -202,7 +202,7 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
     }
     
     switch(inst.codigo_op) {
-        case 0: // sum
+        case 0: {// sum
             operando = cpu_obtener_operando(cpu, inst, memoria); //Trae el dato (segun el direccionamiento)
             
             int ac_nat = sm_a_nativo(cpu->AC); // Traducir a enteros nativos en C para hacer la operacion
@@ -216,8 +216,8 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
             
             log_operacion("SUM", cpu->AC, operando, res); // Registra la actividad en el log
             break;
-            
-        case 1: // res
+        }   
+        case 1: { // res
             operando = cpu_obtener_operando(cpu, inst, memoria); //Trae el dato (segun el direccionamiento)
             
             int ac_nat = sm_a_nativo(cpu->AC); // Traducir a enteros nativos en C para hacer la operacion
@@ -231,8 +231,8 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
             
             log_operacion("RES", cpu->AC, operando, res); // Registra la actividad en el log
             break;
-            
-        case 2: // mult
+        }   
+        case 2: {// mult
             operando = cpu_obtener_operando(cpu, inst, memoria); //Trae el dato (segun el direccionamiento)
             
             int ac_nat = sm_a_nativo(cpu->AC); // Traducir a enteros nativos en C para hacer la operacion
@@ -246,7 +246,7 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
             
             log_operacion("MULT", cpu->AC, operando, res); // Registra la actividad en el log
             break;
-            
+        }   
         case 3: // divi
             operando = cpu_obtener_operando(cpu, inst, memoria);
             int op_nat_divi = sm_a_nativo(operando);
