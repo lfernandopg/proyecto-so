@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 int main() {
+
     Sistema_t sistema;
     
     // Inicializar logger
@@ -17,6 +18,7 @@ int main() {
     
     // Limpiar recursos
     sistema_limpiar(&sistema);
+    
     log_close();
     
     return 0;

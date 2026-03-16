@@ -3,12 +3,16 @@
 
 #include <stdint.h>
 
-// Tamano de palabra: 8 digitos decimales
+// Tamaño de palabra: 8 digitos decimales
 #define TAM_PALABRA 8
 #define TAM_PILA 50 // Tamanio reservado para la pila
 #define TAM_MEMORIA 2000 // Tamanio de la memoria ram es de 2000 posiciones
 #define MEM_SO 300       //300 posiciones reservadas para el SO
-#define MEM_USUARIO (TAM_MEMORIA - MEM_SO)    // Posiciones disponibles para el usuario 
+#define MEM_USUARIO (TAM_MEMORIA - MEM_SO)    // Posiciones disponibles para el usuario
+
+// Cantidad máxima de Procesos en la memoria
+#define MAX_PROCESOS 20
+#define TAM_PARTICION (MEM_USUARIO / MAX_PROCESOS) // 1700 / 20 = 85 particiones estáticas
 
 // El procesador tiene dos modos de ejecucion:
 #define MODO_USUARIO 0
@@ -65,6 +69,15 @@ typedef struct {
     int pc;                // 5 digitos: direccion a la proxima instruccion a leer
 } PSW_t;
 
+// Estados del proceso
+typedef enum {
+    NUEVO,
+    LISTO,
+    EJECUCION,
+    DORMIDO,
+    TERMINADO
+} Estado_t;
+
 // Estructura de la CPU
 typedef struct {
     palabra_t AC;       // Acumulador
@@ -76,8 +89,19 @@ typedef struct {
     palabra_t RX;       // Registro base de pila
     palabra_t SP;       // Apuntador de pila
     PSW_t PSW;          // Palabra de estado del sistema
-    int nuevo_periodo_reloj;
 } CPU_t;
+
+// Estructura del BCP
+typedef struct {
+    int pid;                // Identificación del proceso
+    char nombre_programa[50]; // Para listar en ps y cache de disco
+    Estado_t estado;        // Estado actual
+    CPU_t contexto;         // Copia fiel de los registros cuando el proceso no está en CPU
+    int tiempo_inicio;      // Para estadísticas y logs
+    uint32_t base_disco;    // Dirección donde reside en el disco duro
+    int tics_dormido;       // Tics restantes para despertar
+    int tamano_real;        // Cantidad de palabras reales (codigo + pila)
+} BCP_t;
 
 // Estructura del DMA
 typedef struct {

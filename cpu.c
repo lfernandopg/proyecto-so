@@ -49,7 +49,6 @@ void cpu_inicializar(CPU_t *cpu) {
     cpu->PSW.modo = MODO_KERNEL;       //La CPU siempre debe incializarse en modo kernel
     cpu->PSW.interrupciones = INT_HABILITADAS;  //La CPU reacciona a señales externas
     cpu->PSW.pc = MEM_SO;              //Comienza a leer donde se carga el SO
-    int nuevo_periodo_reloj = 0;
     
     log_mensaje("CPU inicializada");
 }
@@ -321,17 +320,6 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
             break;
             
         case 9: // jmpe (Salta si AC == M[SP])
-            if (cpu->PSW.codigo_condicion == CC_IGUAL) {
-                operando = cpu_obtener_operando(cpu, inst, memoria);
-                
-                if (!interrupcion_pendiente) {
-                    // Ejecutar el salto
-                    cpu_saltar(cpu, operando);
-                    log_operacion("JMPE", cpu->AC, operando, cpu->PSW.pc);
-                }
-            }
-            break;
-
             if (cpu->SP <= 0) { // Verificar que la pila no esté vacía (Underflow)
                 lanzar_interrupcion(INT_UNDERFLOW);
                 break;
@@ -483,7 +471,6 @@ void cpu_ejecutar(CPU_t *cpu, Instruccion_t inst, palabra_t *memoria, Controlado
                 break;
             }
             // Se maneja en el sistema principal
-            cpu->nuevo_periodo_reloj = inst.valor;
             log_operacion("TTI", inst.valor, 0, 0);
             break;
             

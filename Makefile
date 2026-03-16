@@ -3,7 +3,7 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -pthread -g
 TARGET = sistema
-OBJS = main.o sistema.o cpu.o memoria.o dma.o interrupciones.o logger.o
+OBJS = main.o sistema.o cpu.o memoria.o disco.o dma.o interrupciones.o logger.o
 
 # Regla principal
 all: $(TARGET)
@@ -16,7 +16,7 @@ $(TARGET): $(OBJS)
 main.o: main.c sistema.h logger.h
 	$(CC) $(CFLAGS) -c main.c
 
-sistema.o: sistema.c sistema.h cpu.h memoria.h dma.h interrupciones.h logger.h tipos.h
+sistema.o: sistema.c sistema.h cpu.h memoria.h disco.h dma.h interrupciones.h logger.h tipos.h
 	$(CC) $(CFLAGS) -c sistema.c
 
 cpu.o: cpu.c cpu.h interrupciones.h logger.h tipos.h
@@ -24,6 +24,9 @@ cpu.o: cpu.c cpu.h interrupciones.h logger.h tipos.h
 
 memoria.o: memoria.c memoria.h logger.h tipos.h
 	$(CC) $(CFLAGS) -c memoria.c
+
+disco.o: disco.c disco.h logger.h tipos.h
+	$(CC) $(CFLAGS) -c disco.c
 
 dma.o: dma.c dma.h interrupciones.h logger.h tipos.h
 	$(CC) $(CFLAGS) -c dma.c

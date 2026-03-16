@@ -4,12 +4,9 @@
 #include "tipos.h"
 #include "dma.h"
 
-// Convierte de Signo-Magnitud a un entero estándar de C
+
 int sm_a_nativo(palabra_t sm);
-
-// Convierte un entero estándar de C a formato Signo-Magnitud (tu arquitectura)
 palabra_t nativo_a_sm(int valor);
-
 // Inicializa la CPU
 void cpu_inicializar(CPU_t *cpu);
 
